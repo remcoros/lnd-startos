@@ -1,0 +1,222 @@
+bitcoind:
+  type: union
+  name: Bitcoin Core
+  description: |
+    The Bitcoin Core node to connect to:
+      - internal: The Bitcoin Core and Proxy services installed to your Embassy
+      - external: An unpruned Bitcoin Core node running on a different device
+      - quick-connect: A Quick Connect URL for an unpruned Bitcoin Core node
+  tag: type
+  default: internal
+  variants:
+    internal:
+      rpc-address:
+        type: pointer
+        name: Local RPC Address
+        description: The LAN IP address of your Bitcoin Core RPC Proxy service
+        subtype: app
+        app-id: btc-rpc-proxy
+        target: lan-address
+      zmq-address:
+        type: pointer
+        name: Local ZeroMQ Address
+        description: The LAN IP address of your Bitcoin Core service
+        subtype: app
+        app-id: bitcoind
+        target: lan-address
+      user:
+        type: pointer
+        name: RPC Username
+        description: The username for the RPC user allocated to lnd
+        subtype: app
+        app-id: btc-rpc-proxy
+        target: config
+        index: 'users.[first(item => ''item.name = "lnd")].name'
+      password:
+        type: pointer
+        name: RPC Password
+        description: The password for the RPC user allocated to lnd
+        subtype: app
+        app-id: btc-rpc-proxy
+        target: config
+        index: 'users.[first(item => ''item.name = "lnd")].password'
+    external:
+      host:
+        type: string
+        name: Public Address
+        description: The public address of your Bitcoin Core server
+        nullable: false
+      rpc-user:
+        type: string
+        name: RPC Username
+        description: The username for the RPC user on your Bitcoin Core RPC server
+        nullable: false
+      rpc-password:
+        type: string
+        name: RPC Password
+        description: The password for the RPC user on your Bitcoin Core RPC server
+        nullable: false
+      rpc-port:
+        type: number
+        name: RPC Port
+        description: The port that your Bitcoin Core RPC server is bound to
+        nullable: false
+        range: "[0,65535]"
+        integral: true
+        default: 8332
+      zmq-block-port:
+        type: number
+        name: ZeroMQ Block Port
+        description: The port that your Bitcoin Core ZeroMQ server is bound to for raw blocks
+        nullable: false
+        range: "[0,65535]"
+        integral: true
+        default: 28332
+      zmq-tx-port:
+        type: number
+        name: ZeroMQ Transaction Port
+        description: The port that your Bitcoin Core ZeroMQ server is bound to for raw transactions
+        nullable: false
+        range: "[0,65535]"
+        integral: true
+        default: 28333
+    quick-connect:
+      quick-connect-url:
+        type: string
+        name: Quick Connect URL
+        description: The Quick Connect URL for your Bitcoin Core RPC server
+        nullable: false
+        pattern: 'btcstandup://[^:]*:[^@]*@[a-zA-Z0-9.-]+:[0-9]+(/(\?(label=.+)?)?)?'
+        patternDescription: Must be a valid Quick Connect URL. For help, check out https://github.com/BlockchainCommons/Gordian/blob/master/Docs/Quick-Connect-API.md
+      zmq-block-port:
+        type: number
+        name: ZeroMQ Block Port
+        description: The port that your Bitcoin Core ZeroMQ server is bound to for raw blocks
+        nullable: false
+        range: "[0,65535]"
+        integral: true
+        default: 28332
+      zmq-tx-port:
+        type: number
+        name: ZeroMQ Transaction Port
+        description: The port that your Bitcoin Core ZeroMQ server is bound to for raw transactions
+        nullable: false
+        range: "[0,65535]"
+        integral: true
+        default: 28333
+autopilot:
+  type: object
+  name: Autopilot
+  description: Autopilot Settings
+  nullable: false
+  nullByDefault: false
+  spec:
+    enabled:
+      type: boolean
+      name: Enabled
+      description: |
+        If the autopilot agent should be active or not. The autopilot agent will
+        attempt to automatically open up channels to put your node in an advantageous
+        position within the network graph.
+      default: true
+    private:
+      type: boolean
+      name: Enabled
+      description: |
+        Whether the channels created by the autopilot agent should be private or not.
+        Private channels won't be announced to the network.
+      default: false
+    maxchannels:
+      type: number
+      name: Maximum Channels
+      description: The maximum number of channels that should be created.
+      nullable: false
+      range: "[1,*)"
+      integral: true
+      default: 5
+    allocation:
+      type: number
+      name: Allocation
+      description: |
+        The fraction of total funds that should be committed to automatic channel
+        establishment. For example 60% means that 60% of the total funds available
+        within the wallet should be used to automatically establish channels. The total
+        amount of attempted channels will still respect the "Maximum Channels" parameter.
+      nullable: false
+      range: "[0,100]"
+      integral: false
+      default: 60
+      units: "%"
+    min-channel-size:
+      type: number
+      name: Minimum Channel Size
+      description: The smallest channel that the autopilot agent should create.
+      nullable: false
+      range: "[0,*)"
+      integral: true
+      default: 20000
+      units: "satoshis"
+    max-channel-size:
+      type: number
+      name: Maximum Channel Size
+      description: The largest channel that the autopilot agent should create.
+      nullable: false
+      range: "[0,*)"
+      integral: true
+      default: 16777215
+      units: "satoshis"
+    advanced:
+      type: object
+      name: Advanced
+      description: Advanced Options
+      nullable: false
+      nullByDefault: false
+      spec:
+        min-confirmations:
+          type: number
+          name: Minimum Confirmations
+          description: |
+            The minimum number of confirmations each of your inputs in funding transactions
+            created by the autopilot agent must have.
+          nullable: false
+          range: "[0,*)"
+          integral: true
+          default: 1
+        confirmation-target:
+          type: number
+          name: Confirmation Target
+          description: The confirmation target (in blocks) for channels opened by autopilot.
+          nullable: false
+          range: "[0,*)"
+          integral: true
+          default: 1
+watchtower-enabled:
+  type: boolean
+  name: Watchtower
+  description: Enable integrated watchtower.
+  default: true
+watchtower-client-enabled:
+  type: boolean
+  name: Watchtower Client
+  description: Activate Watchtower Client.
+  default: true
+advanced:
+  type: object
+  name: Advanced
+  description: Advanced Options
+  nullable: false
+  nullByDefault: false
+  spec:
+    payments-expiration-grace-period:
+      type: number
+      name: Payments Expiration Grace Period
+      description: |
+        A period to wait before for closing channels with outgoing htlcs that have 
+        timed out and are a result of this nodes instead payment. In addition to our 
+        current block based deadline, is specified this grace period will also be taken
+        into account.
+      nullable: false
+      range: "[1,*)"
+      integral: true
+      default: 30
+      units: "seconds"

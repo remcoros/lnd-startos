@@ -13,7 +13,7 @@ bitcoind:
       rpc-address:
         type: pointer
         name: Local RPC Address
-        description: The LAN IP address of your Bitcoin Core RPC Proxy service
+        description: The LAN IP address of your Bitcoin Proxy service
         subtype: app
         app-id: btc-rpc-proxy
         target: lan-address

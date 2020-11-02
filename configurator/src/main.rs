@@ -289,6 +289,7 @@ fn main() -> Result<(), anyhow::Error> {
     }
     let mut macaroon_file = File::open("/root/.lnd/data/chain/bitcoin/mainnet/admin.macaroon")?;
     let mut macaroon_vec = Vec::with_capacity(macaroon_file.metadata()?.len() as usize);
+    let tls_cert = std::fs::read_to_string("/root/.lnd/tls.cert")?;
     macaroon_file.read_to_end(&mut macaroon_vec)?;
     serde_yaml::to_writer(
         File::create("/root/.lnd/start9/stats.yaml")?,
@@ -302,7 +303,7 @@ fn main() -> Result<(), anyhow::Error> {
                         tor_address = tor_address,
                         cert = base64::encode_config(
                             base64::decode(
-                                std::fs::read_to_string("/root/.lnd/tls.cert")?
+                                tls_cert
                                     .lines()
                                     .filter(|l| !l.is_empty())
                                     .filter(|l| *l != "-----BEGIN CERTIFICATE-----")
@@ -324,5 +325,8 @@ fn main() -> Result<(), anyhow::Error> {
             },
         },
     )?;
+    std::fs::create_dir_all("/root/.lnd/public")?;
+    File::create("/root/.lnd/public/admin.macaroon")?.write_all(&macaroon_vec)?;
+    File::create("/root/.lnd/public/tls.cert")?.write_all(tls_cert.as_bytes())?;
     Ok(())
 }

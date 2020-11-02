@@ -18,6 +18,7 @@ ports:
 image:
   type: tar
 mount: /root/.lnd
+public: public
 has-instructions: true
 os-version-required: ">=0.2.5"
 os-version-recommended: ">=0.2.5"
@@ -54,12 +55,6 @@ dependencies:
           - PUSH:
               to: 'users.[first(item => ''item.name = "lnd")].allowed-calls'
               value: "getblockchaininfo"
-      - rule: '''users.[first(item => ''item.name = "lnd")].allowed-calls.* = "getinfo"'
-        description: 'RPC user "lnd" must have "getinfo" enabled'
-        suggestions:
-          - PUSH:
-              to: 'users.[first(item => ''item.name = "lnd")].allowed-calls'
-              value: "getinfo"
       - rule: '''users.[first(item => ''item.name = "lnd")].allowed-calls.* = "sendrawtransaction"'
         description: 'RPC user "lnd" must have "sendrawtransaction" enabled'
         suggestions:
@@ -106,4 +101,10 @@ dependencies:
     version: "^0.20.1" # 0.20.1.1
     optional: Can configure an external bitcoin node.
     description: Required for subscribing to new block events.
-    config: []
+    config:
+      - rule: "zmq-enabled?"
+        description: "Must have an ZeroMQ enabled"
+        suggestions:
+          - SET:
+              var: "zmq-enabled"
+              to-value: true

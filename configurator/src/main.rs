@@ -326,7 +326,15 @@ fn main() -> Result<(), anyhow::Error> {
         },
     )?;
     std::fs::create_dir_all("/root/.lnd/public")?;
-    File::create("/root/.lnd/public/admin.macaroon")?.write_all(&macaroon_vec)?;
+    for macaroon in std::fs::read_dir("/root/.lnd/data/chain/bitcoin/mainnet")? {
+        let macaroon = macaroon?;
+        if macaroon.path().extension().and_then(|s| s.to_str()) == Some("macaroon") {
+            std::fs::copy(
+                macaroon.path(),
+                Path::new("/root/.lnd/public").join(macaroon.path().file_name().unwrap()),
+            )?;
+        }
+    }
     File::create("/root/.lnd/public/tls.cert")?.write_all(tls_cert.as_bytes())?;
     Ok(())
 }

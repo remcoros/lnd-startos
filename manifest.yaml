@@ -98,7 +98,7 @@ dependencies:
               var: 'users.[first(item => ''item.name = "lnd")].fetch-blocks'
               to-value: true
   bitcoind:
-    version: "^0.20.1" # 0.20.1.1
+    version: "^0.20.1.1"
     optional: Can configure an external bitcoin node.
     description: Required for subscribing to new block events.
     config:

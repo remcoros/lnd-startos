@@ -47,8 +47,8 @@ dependencies:
         description: 'RPC user "lnd" must have "getinfo" enabled'
         suggestions:
           - PUSH:
-            to: 'users.[first(item => ''item.name = "lnd")].allwed-calls'
-            value: "getinfo"
+              to: 'users.[first(item => ''item.name = "lnd")].allowed-calls'
+              value: "getinfo"
       - rule: '''users.[first(item => ''item.name = "lnd")].allowed-calls.* = "getbestblockhash"'
         description: 'RPC user "lnd" must have "getbestblockhash" enabled'
         suggestions:

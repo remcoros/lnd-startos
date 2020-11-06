@@ -27,8 +27,8 @@ hidden-service-version: v3
 dependencies:
   btc-rpc-proxy:
     version: "^0.2.0"
-    optional: Can configure an external bitcoin node.
-    description: Required for fetching validated blocks.
+    optional: Can alternatively configure an external bitcoin node.
+    description: Used to fetch validated blocks.
     config:
       - rule: '''users.*.name = "lnd"'
         description: 'Must have an RPC user named "lnd"'
@@ -43,6 +43,18 @@ dependencies:
               to-entropy:
                 charset: "a-z,A-Z,0-9"
                 len: 22
+      - rule: '''users.[first(item => ''item.name = "lnd")].allowed-calls.* = "getinfo"'
+        description: 'RPC user "lnd" must have "getinfo" enabled'
+        suggestions:
+          - PUSH:
+            to: 'users.[first(item => ''item.name = "lnd")].allwed-calls'
+            value: "getinfo"
+      - rule: '''users.[first(item => ''item.name = "lnd")].allowed-calls.* = "getbestblockhash"'
+        description: 'RPC user "lnd" must have "getbestblockhash" enabled'
+        suggestions:
+          - PUSH:
+              to: 'users.[first(item => ''item.name = "lnd")].allowed-calls'
+              value: "getbestblockhash"
       - rule: '''users.[first(item => ''item.name = "lnd")].allowed-calls.* = "gettxout"'
         description: 'RPC user "lnd" must have "gettxout" enabled'
         suggestions:
@@ -98,9 +110,9 @@ dependencies:
               var: 'users.[first(item => ''item.name = "lnd")].fetch-blocks'
               to-value: true
   bitcoind:
-    version: "^0.20.1" # 0.20.1.1
-    optional: Can configure an external bitcoin node.
-    description: Required for subscribing to new block events.
+    version: "^0.20.1.1"
+    optional: Can alternatively configure an external bitcoin node.
+    description: Used to subscribe to new block events.
     config:
       - rule: "zmq-enabled?"
         description: "Must have an ZeroMQ enabled"

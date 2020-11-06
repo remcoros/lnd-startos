@@ -121,7 +121,7 @@ autopilot:
       default: true
     private:
       type: boolean
-      name: Enabled
+      name: Private
       description: |
         Whether the channels created by the autopilot agent should be private or not.
         Private channels won't be announced to the network.

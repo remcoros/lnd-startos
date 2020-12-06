@@ -1,6 +1,6 @@
-**Integrating Zap Wallet with you Embassy LND node**
+# Zap Wallet
 
-Zap is designed to work with a remote LND node but has issues when connecting over Tor. If you experience these issues, please reach out to the Zap team and report it.
+Zap is designed to work with a remote LND node but currently has issues when connecting over Tor. If you experience these issues, please reach out to the Zap team and report it.
 
 ## Android
 

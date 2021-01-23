@@ -2,7 +2,7 @@ ASSETS := $(shell yq e '.assets.[].src' manifest.yaml)
 ASSET_PATHS := $(addprefix assets/,$(ASSETS))
 VERSION_TAG := $(shell git --git-dir=lnd/.git describe --abbrev=0)
 VERSION := $(VERSION_TAG:v%=%)
-VERSION_SIMPLE := $(VERSION:%-%=%)
+VERSION_SIMPLE := $(shell echo $(VERSION) | sed -E 's/([0-9]+\.[0-9]+\.[0-9]+).*/\1/g')
 LND_GIT_REF := $(shell cat .git/modules/lnd/HEAD)
 LND_GIT_FILE := $(addprefix .git/modules/lnd/,$(if $(filter ref:%,$(LND_GIT_REF)),$(lastword $(LND_GIT_REF)),HEAD))
 CONFIGURATOR_SRC := $(shell find ./configurator/src) configurator/Cargo.toml configurator/Cargo.lock
@@ -26,5 +26,5 @@ configurator/target/armv7-unknown-linux-musleabihf/release/configurator: $(CONFI
 	docker run --rm -it -v ~/.cargo/registry:/root/.cargo/registry -v "$(shell pwd)"/configurator:/home/rust/src start9/rust-musl-cross:armv7-musleabihf musl-strip target/armv7-unknown-linux-musleabihf/release/configurator
 
 manifest.yaml: $(LND_GIT_FILE)
-	yq w -i manifest.yaml version $(VERSION_SIMPLE)
-	yq w -i manifest.yaml release-notes https://github.com/lightningnetwork/lnd/releases/tag/$(VERSION_TAG)
+	yq eval -i ".version = \"$(VERSION_SIMPLE)\"" manifest.yaml
+	yq eval -i ".release-notes = \"https://github.com/lightningnetwork/lnd/releases/tag/$(VERSION_TAG)\"" manifest.yaml

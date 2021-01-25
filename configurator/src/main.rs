@@ -561,7 +561,7 @@ fn main() -> Result<(), anyhow::Error> {
                 node_uri: Property {
                     value_type: "string",
                     value: format!(
-                        "{pubkey}@{tor_address}",
+                        "{pubkey}@{tor_address}:9735",
                         pubkey = node_info.identity_pubkey,
                         tor_address = tor_address
                     ),

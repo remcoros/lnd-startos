@@ -1,7 +1,6 @@
 # Zap Wallet
 
 Zap is designed to work with a remote LND node but currently has issues when connecting over Tor. If you experience these issues, please reach out to the Zap team and report it.
-
 ## Android
 
 1. Download Orbot

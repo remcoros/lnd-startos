@@ -336,32 +336,36 @@ fn main() -> Result<(), anyhow::Error> {
     }
 
     // TLS Certificate migration from 0.11.0 -> 0.11.1 release (to include tor address)
-    let bs = std::fs::read(Path::new("/root/.lnd/tls.cert"))?;
-    let (_, pem) = pem::parse_x509_pem(&bs)?;
-    let cert = pem.parse_x509()?;
-    let subj_alt_name_oid = "2.5.29.17".parse().unwrap();
-    let ext = cert
-        .extensions()
-        .get(&subj_alt_name_oid)
-        .ok_or(anyhow!("No Alternative Names"))?
-        .parsed_extension(); // oid for subject alternative names
-    match ext {
-        x509_parser::extensions::ParsedExtension::SubjectAlternativeName(names) => {
-            if !(&names.general_names).into_iter().any(|a| match *a {
-                x509_parser::extensions::GeneralName::DNSName(host) => host == tor_address,
-                _ => false,
-            }) {
-                println!("Replacing Certificates");
-                // Delete the tls.key
-                std::fs::remove_file(Path::new("/root/.lnd/tls.key"))?;
-                // Delete the tls.cert
-                std::fs::remove_file(Path::new("/root/.lnd/tls.cert"))?;
-            } else {
-                println!("Certificate check complete. No changes required.");
+    let cert_path = Path::new("/root/.lnd/tls.cert");
+    if cert_path.exists() {
+        let bs = std::fs::read(cert_path)?;
+        let (_, pem) = pem::parse_x509_pem(&bs)?;
+        let cert = pem.parse_x509()?;
+        let subj_alt_name_oid = "2.5.29.17".parse().unwrap();
+        let ext = cert
+            .extensions()
+            .get(&subj_alt_name_oid)
+            .ok_or(anyhow!("No Alternative Names"))?
+            .parsed_extension(); // oid for subject alternative names
+        match ext {
+            x509_parser::extensions::ParsedExtension::SubjectAlternativeName(names) => {
+                if !(&names.general_names).into_iter().any(|a| match *a {
+                    x509_parser::extensions::GeneralName::DNSName(host) => host == tor_address,
+                    _ => false,
+                }) {
+                    println!("Replacing Certificates");
+                    // Delete the tls.key
+                    std::fs::remove_file(Path::new("/root/.lnd/tls.key"))?;
+                    // Delete the tls.cert
+                    std::fs::remove_file(Path::new("/root/.lnd/tls.cert"))?;
+                } else {
+                    println!("Certificate check complete. No changes required.");
+                }
             }
+            _ => panic!("Type does not correspond with OID"),
         }
-        _ => panic!("Type does not correspond with OID"),
-    }
+    } // if it doesn't exist, LND will correctly create it this time.
+
     // write backup ignore to the root of the mounted volume
     std::fs::write(
         Path::new("/root/.lnd/.backupignore.tmp"),

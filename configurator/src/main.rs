@@ -401,10 +401,6 @@ fn main() -> Result<(), anyhow::Error> {
     }?;
 
     let mut password_bytes = [0; 16];
-    let mac = std::fs::read(Path::new(
-        "/root/.lnd/data/chain/bitcoin/mainnet/admin.macaroon",
-    ))?;
-    let mac_encoded = hex::encode_upper(mac);
     if Path::new("/root/.lnd/pwd.dat").exists() {
         let mut pass_file = File::open("/root/.lnd/pwd.dat")?;
         pass_file.read_exact(&mut password_bytes)?;
@@ -428,6 +424,10 @@ fn main() -> Result<(), anyhow::Error> {
                     while local_port_available(8080)? {
                         std::thread::sleep(Duration::from_secs(10))
                     }
+                    let mac = std::fs::read(Path::new(
+                        "/root/.lnd/data/chain/bitcoin/mainnet/admin.macaroon",
+                    ))?;
+                    let mac_encoded = hex::encode_upper(mac);
                     let status = std::process::Command::new("curl")
                         .arg("-X")
                         .arg("POST")
@@ -492,6 +492,7 @@ fn main() -> Result<(), anyhow::Error> {
     let mut macaroon_vec = Vec::with_capacity(macaroon_file.metadata()?.len() as usize);
     let tls_cert = std::fs::read_to_string("/root/.lnd/tls.cert")?;
     macaroon_file.read_to_end(&mut macaroon_vec)?;
+    let mac_encoded = hex::encode_upper(&macaroon_vec);
     while local_port_available(8080)? {
         std::thread::sleep(Duration::from_secs(10))
     }

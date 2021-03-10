@@ -7,7 +7,7 @@ ADD . /root
 
 WORKDIR /root/lnd
 
-RUN make -j24 install tags="autopilotrpc signrpc walletrpc chainrpc invoicesrpc routerrpc watchtowerrpc"
+RUN make -j8 install tags="autopilotrpc signrpc walletrpc chainrpc invoicesrpc routerrpc watchtowerrpc"
 
 FROM alpine:3.12 as runner
 

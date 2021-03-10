@@ -389,14 +389,19 @@ fn main() -> Result<(), anyhow::Error> {
             println!(
                 "Detected Embassy Restore. Conducting precautionary channel backup restoration."
             );
-            let bs = std::fs::read(Path::new(
-                "/root/.lnd/data/chain/bitcoin/mainnet/channel.backup",
-            ))?;
-            std::fs::remove_dir_all("/root/.lnd/data/graph")?;
-            let encoded = base64::encode(bs);
-            Ok::<Option<Value>, std::io::Error>(Some(serde_json::json!({
-                "multi_chan_backup": encoded
-            })))
+            let channel_backup_path =
+                Path::new("/root/.lnd/data/chain/bitcoin/mainnet/channel.backup");
+            if channel_backup_path.exists() {
+                let bs = std::fs::read(channel_backup_path)?;
+                std::fs::remove_dir_all("/root/.lnd/data/graph")?;
+                let encoded = base64::encode(bs);
+                Ok::<Option<Value>, std::io::Error>(Some(serde_json::json!({
+                    "multi_chan_backup": encoded
+                })))
+            } else {
+                println!("No channel restoration required. No channel backup exists.");
+                Ok(None)
+            }
         }
     }?;
 

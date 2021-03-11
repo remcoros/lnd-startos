@@ -24,11 +24,12 @@ bitcoind:
     The Bitcoin Core node to connect to:
       - internal: The Bitcoin Core and Proxy services installed to your Embassy
       - external: An unpruned Bitcoin Core node running on a different device
-      - quick-connect: A Quick Connect URL for an unpruned Bitcoin Core node
-  variantNames:
-    internal: Internal
-    external: External
-  tag: type
+  tag:
+    id: type
+    name: Type
+    variantNames:
+      internal: Internal
+      external: External
   default: internal
   variants:
     internal:

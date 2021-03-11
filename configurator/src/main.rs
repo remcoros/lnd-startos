@@ -101,6 +101,16 @@ enum BitcoinCoreConfig {
     },
     #[serde(rename_all = "kebab-case")]
     External {
+        connection_settings: ExternalBitcoinCoreConfig,
+    },
+}
+
+#[derive(serde::Deserialize)]
+#[serde(tag = "type")]
+#[serde(rename_all = "kebab-case")]
+enum ExternalBitcoinCoreConfig {
+    #[serde(rename_all = "kebab-case")]
+    Manual {
         #[serde(deserialize_with = "deserialize_parse")]
         host: Uri,
         rpc_user: String,
@@ -266,12 +276,15 @@ fn main() -> Result<(), anyhow::Error> {
                 28333,
             ),
             BitcoinCoreConfig::External {
-                host,
-                rpc_user,
-                rpc_password,
-                rpc_port,
-                zmq_block_port,
-                zmq_tx_port,
+                connection_settings:
+                    ExternalBitcoinCoreConfig::Manual {
+                        host,
+                        rpc_user,
+                        rpc_password,
+                        rpc_port,
+                        zmq_block_port,
+                        zmq_tx_port,
+                    },
             } => (
                 rpc_user,
                 rpc_password,
@@ -281,10 +294,13 @@ fn main() -> Result<(), anyhow::Error> {
                 zmq_block_port,
                 zmq_tx_port,
             ),
-            BitcoinCoreConfig::QuickConnect {
-                quick_connect_url,
-                zmq_block_port,
-                zmq_tx_port,
+            BitcoinCoreConfig::External {
+                connection_settings:
+                    ExternalBitcoinCoreConfig::QuickConnect {
+                        quick_connect_url,
+                        zmq_block_port,
+                        zmq_tx_port,
+                    },
             } => {
                 let (bitcoin_rpc_user, bitcoin_rpc_pass, bitcoin_rpc_host, bitcoin_rpc_port) =
                     parse_quick_connect_url(quick_connect_url)?;

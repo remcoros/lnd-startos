@@ -112,6 +112,12 @@ dependencies:
           - PUSH:
               to: 'users.[first(item => ''item.name = "lnd")].allowed-calls'
               value: "getnetworkinfo"
+      - rule: '''users.[first(item => ''item.name = "lnd")].allowed-calls.* = "uptime"'
+        description: 'RPC user "lnd" must have "uptime" enabled'
+        suggestions:
+          - PUSH:
+              to: 'users.[first(item => ''item.name = "lnd")].allowed-calls'
+              value: "uptime"
       - rule: 'users.[first(item => ''item.name = "lnd")].fetch-blocks?'
         description: 'RPC user "lnd" must have "Fetch Blocks" enabled'
         suggestions:

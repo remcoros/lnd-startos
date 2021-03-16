@@ -1,6 +1,6 @@
 compat: v0
 id: lnd
-version: 0.12.1.1
+version: 0.12.1.2
 title: Lightning Network Daemon
 description:
   short: "A complete implementation of a Lightning Network node by Lightning Labs"
@@ -118,6 +118,12 @@ dependencies:
           - PUSH:
               to: 'users.[first(item => ''item.name = "lnd")].allowed-calls'
               value: "uptime"
+      - rule: '''users.[first(item => ''item.name = "lnd")].allowed-calls.* = "getrawtransaction"'
+        description: 'RPC user "lnd" must have "getrawtransaction" enabled'
+        suggestions:
+          - PUSH:
+              to: 'users.[first(item => ''item.name = "lnd")].allowed-calls'
+              value: "getrawtransaction"
       - rule: 'users.[first(item => ''item.name = "lnd")].fetch-blocks?'
         description: 'RPC user "lnd" must have "Fetch Blocks" enabled'
         suggestions:

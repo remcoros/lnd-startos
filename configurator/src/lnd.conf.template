@@ -7,6 +7,7 @@ restlisten=0.0.0.0:8080
 tlsextradomain={tor_address}
 alias={alias}
 color=#{color}
+accept-keysend=#{accept_keysend}
 
 [Bitcoin]
 bitcoin.active=true

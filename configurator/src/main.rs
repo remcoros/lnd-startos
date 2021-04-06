@@ -70,6 +70,7 @@ impl std::fmt::Display for SkipNulls {
 struct Config {
     alias: Option<String>,
     color: String,
+    accept_keysend: bool,
     bitcoind: BitcoinCoreConfig,
     autopilot: AutoPilotConfig,
     watchtower_enabled: bool,
@@ -322,6 +323,7 @@ fn main() -> Result<(), anyhow::Error> {
             include_str!("lnd.conf.template"),
             alias = alias,
             color = config.color,
+            accept_keysend = config.accept_keysend,
             bitcoin_default_chan_confs = config.advanced.bitcoin.default_channel_confirmations,
             bitcoin_min_htlc = config.advanced.bitcoin.min_htlc,
             bitcoin_min_htlc_out = config.advanced.bitcoin.min_htlc_out,

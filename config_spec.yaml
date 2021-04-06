@@ -17,6 +17,12 @@ color:
   default:
     charset: "a-f,0-9"
     len: 6
+accept-keysend:
+  type: boolean
+  name: Accept Keysend
+  description: |
+    Allow others to send payments directly to your public key through keysend instead of having to get a new invoice
+  default: false
 bitcoind:
   type: union
   name: Bitcoin Core

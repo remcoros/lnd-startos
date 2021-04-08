@@ -17,6 +17,12 @@ color:
   default:
     charset: "a-f,0-9"
     len: 6
+accept-keysend:
+  type: boolean
+  name: Accept Keysend
+  description: |
+    Allow others to send payments directly to your public key through keysend instead of having to get a new invoice
+  default: false
 bitcoind:
   type: union
   name: Bitcoin Core
@@ -252,6 +258,13 @@ advanced:
   nullable: false
   nullByDefault: false
   spec:
+    db-bolt-auto-compact:
+      type: boolean
+      name: Compact Database on Startup
+      description: |
+        Performs database compaction on startup. This is necessary to keep disk usage down over time at the cost of
+        having longer startup times.
+      default: true
     recovery-window:
       type: number
       name: Recovery Window

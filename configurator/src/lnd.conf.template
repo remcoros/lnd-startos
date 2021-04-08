@@ -7,6 +7,7 @@ restlisten=0.0.0.0:8080
 tlsextradomain={tor_address}
 alias={alias}
 color=#{color}
+accept-keysend={accept_keysend}
 
 [Bitcoin]
 bitcoin.active=true
@@ -47,3 +48,6 @@ watchtower.externalip={tor_address}:9911
 
 [wtclient]
 wtclient.active={watchtower_client_enabled}
+
+[bolt]
+db.bolt.auto-compact={db_bolt_auto_compact}

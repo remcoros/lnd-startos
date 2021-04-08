@@ -48,3 +48,6 @@ watchtower.externalip={tor_address}:9911
 
 [wtclient]
 wtclient.active={watchtower_client_enabled}
+
+[bolt]
+db.bolt.auto-compact={db_bolt_auto_compact}

@@ -258,6 +258,13 @@ advanced:
   nullable: false
   nullByDefault: false
   spec:
+    db-bolt-auto-compact:
+      type: boolean
+      name: Compact Database on Startup
+      description: |
+        Performs database compaction on startup. This is necessary to keep disk usage down over time at the cost of
+        having longer startup times.
+      default: true
     recovery-window:
       type: number
       name: Recovery Window

@@ -151,6 +151,7 @@ struct AutoPilotAdvancedConfig {
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct AdvancedConfig {
+    db_bolt_auto_compact: bool,
     recovery_window: Option<usize>,
     payments_expiration_grace_period: usize,
     bitcoin: BitcoinChannelConfig,
@@ -350,6 +351,7 @@ fn main() -> Result<(), anyhow::Error> {
             autopilot_confirmation_target = config.autopilot.advanced.confirmation_target,
             watchtower_enabled = config.watchtower_enabled,
             watchtower_client_enabled = config.watchtower_client_enabled,
+            db_bolt_auto_compact = config.advanced.db_bolt_auto_compact,
         )?;
     }
 

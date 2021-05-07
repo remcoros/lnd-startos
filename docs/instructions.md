@@ -26,10 +26,6 @@ Once you have open channels and are ready to transact on the Lightning Network, 
 
 # Lightning Usage Guide
 
-## Selecting a Wallet
-
-In order to use your new LND node, you will need to select a wallet. Your Embassy Marketplace offers a wallet called Ride The Lightning, which will automatically connect to the LND node running on your Embassy. No configuration required. You could also you a mobile app like Zap or Zeus.
-
 ## Getting On-Chain Funds
 
 Before you can open and channel and start transacting on the Lightning network, you need some Bitcoin stored on your LND node. Be advised, Bitcoin funds that you transfer to your LND node are hot, meaning, the are stored directly on your Embassy. There is no way to use cold storage when using Lightning, which is why people call it reckless. For this reason, it is usually unwise to move large amounts of Bitcoin to your LND node. That said, you don't want to move a tiny amount either, since that would limit your purchasing power on the Lightning network. We recommend moving about 500,000-5,000,000 satoshis, or .005-.05 Bitcoin, which at current (May 7, 2021) prices is about $250-$2,500. This gives you a solid amount of purchasing power, but hopefully wouldn't ruin your life if something were to go terribly wrong. If you feel comfortable using more Bitcoin, then by all means, go for it.

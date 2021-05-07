@@ -158,19 +158,25 @@ struct AdvancedConfig {
 }
 
 #[derive(serde::Serialize)]
-pub struct Properties {
+pub struct Properties<'a> {
     version: u8,
-    data: Data,
+    data: Data<'a>,
 }
 
 #[derive(serde::Serialize)]
-pub struct Data {
+pub struct Data<'a> {
+    #[serde(rename = "LND Sync Height")]
+    sync_height: Property<String>,
+    #[serde(rename = "Synced To Chain")]
+    synced_to_chain: Property<String>,
+    #[serde(rename = "Synced To Graph")]
+    synced_to_graph: Property<String>,
     #[serde(rename = "LND Connect gRPC URL")]
-    lnd_connect_grpc: Property<String>,
+    lnd_connect_grpc: &'a Property<String>,
     #[serde(rename = "LND Connect REST URL")]
-    lnd_connect_rest: Property<String>,
+    lnd_connect_rest: &'a Property<String>,
     #[serde(rename = "NODE URI")]
-    node_uri: Property<String>,
+    node_uri: &'a Property<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -199,6 +205,9 @@ pub struct RestoreInfo {
 #[derive(serde::Deserialize)]
 pub struct LndGetInfoRes {
     identity_pubkey: String,
+    block_height: u32,
+    synced_to_chain: bool,
+    synced_to_graph: bool,
 }
 
 fn get_alias(config: &Config) -> Result<String, anyhow::Error> {
@@ -521,7 +530,7 @@ fn main() -> Result<(), anyhow::Error> {
     while local_port_available(8080)? {
         std::thread::sleep(Duration::from_secs(10))
     }
-    let node_info: LndGetInfoRes = serde_json::from_slice(
+    let mut node_info: LndGetInfoRes = serde_json::from_slice(
         &std::process::Command::new("curl")
             .arg("--cacert")
             .arg("/root/.lnd/tls.cert")
@@ -531,82 +540,72 @@ fn main() -> Result<(), anyhow::Error> {
             .output()?
             .stdout,
     )?;
-    serde_yaml::to_writer(
-        File::create("/root/.lnd/start9/stats.yaml")?,
-        &Properties {
-            version: 2,
-            data: Data {
-                lnd_connect_grpc: Property {
-                    value_type: "string",
-                    value: format!(
-                        "lndconnect://{tor_address}:10009?cert={cert}&macaroon={macaroon}",
-                        tor_address = tor_address,
-                        cert = base64::encode_config(
-                            base64::decode(
-                                tls_cert
-                                    .lines()
-                                    .filter(|l| !l.is_empty())
-                                    .filter(|l| *l != "-----BEGIN CERTIFICATE-----")
-                                    .filter(|l| *l != "-----END CERTIFICATE-----")
-                                    .collect::<String>()
-                            )?,
-                            base64::Config::new(base64::CharacterSet::UrlSafe, false)
-                        ),
-                        macaroon = base64::encode_config(
-                            &macaroon_vec,
-                            base64::Config::new(base64::CharacterSet::UrlSafe, false)
-                        ),
-                    ),
-                    description: None,
-                    copyable: true,
-                    qr: true,
-                    masked: true,
-                },
-                lnd_connect_rest: Property {
-                    value_type: "string",
-                    value: format!(
-                        "lndconnect://{tor_address}:8080?cert={cert}&macaroon={macaroon}",
-                        tor_address = tor_address,
-                        cert = base64::encode_config(
-                            base64::decode(
-                                tls_cert
-                                    .lines()
-                                    .filter(|l| !l.is_empty())
-                                    .filter(|l| *l != "-----BEGIN CERTIFICATE-----")
-                                    .filter(|l| *l != "-----END CERTIFICATE-----")
-                                    .collect::<String>()
-                            )?,
-                            base64::Config::new(base64::CharacterSet::UrlSafe, false)
-                        ),
-                        macaroon = base64::encode_config(
-                            &macaroon_vec,
-                            base64::Config::new(base64::CharacterSet::UrlSafe, false)
-                        ),
-                    ),
-                    description: None,
-                    copyable: true,
-                    qr: true,
-                    masked: true,
-                },
-                node_uri: Property {
-                    value_type: "string",
-                    value: format!(
-                        "{pubkey}@{tor_address}:9735",
-                        pubkey = node_info.identity_pubkey,
-                        tor_address = tor_address
-                    ),
-                    description: Some(
-                        "Give this to others to allow them to add your LND node as a peer"
-                            .to_owned(),
-                    ),
-                    copyable: true,
-                    qr: true,
-                    masked: false,
-                },
-            },
-        },
-    )?;
-
+    let lnd_connect_grpc = Property {
+        value_type: "string",
+        value: format!(
+            "lndconnect://{tor_address}:10009?cert={cert}&macaroon={macaroon}",
+            tor_address = tor_address,
+            cert = base64::encode_config(
+                base64::decode(
+                    tls_cert
+                        .lines()
+                        .filter(|l| !l.is_empty())
+                        .filter(|l| *l != "-----BEGIN CERTIFICATE-----")
+                        .filter(|l| *l != "-----END CERTIFICATE-----")
+                        .collect::<String>()
+                )?,
+                base64::Config::new(base64::CharacterSet::UrlSafe, false)
+            ),
+            macaroon = base64::encode_config(
+                &macaroon_vec,
+                base64::Config::new(base64::CharacterSet::UrlSafe, false)
+            ),
+        ),
+        description: None,
+        copyable: true,
+        qr: true,
+        masked: true,
+    };
+    let lnd_connect_rest = Property {
+        value_type: "string",
+        value: format!(
+            "lndconnect://{tor_address}:8080?cert={cert}&macaroon={macaroon}",
+            tor_address = tor_address,
+            cert = base64::encode_config(
+                base64::decode(
+                    tls_cert
+                        .lines()
+                        .filter(|l| !l.is_empty())
+                        .filter(|l| *l != "-----BEGIN CERTIFICATE-----")
+                        .filter(|l| *l != "-----END CERTIFICATE-----")
+                        .collect::<String>()
+                )?,
+                base64::Config::new(base64::CharacterSet::UrlSafe, false)
+            ),
+            macaroon = base64::encode_config(
+                &macaroon_vec,
+                base64::Config::new(base64::CharacterSet::UrlSafe, false)
+            ),
+        ),
+        description: None,
+        copyable: true,
+        qr: true,
+        masked: true,
+    };
+    let node_uri = Property {
+        value_type: "string",
+        value: format!(
+            "{pubkey}@{tor_address}:9735",
+            pubkey = node_info.identity_pubkey,
+            tor_address = tor_address
+        ),
+        description: Some(
+            "Give this to others to allow them to add your LND node as a peer".to_owned(),
+        ),
+        copyable: true,
+        qr: true,
+        masked: false,
+    };
     // Create public directory to make accessible to dependents through the bindmounts interface
     std::fs::create_dir_all("/root/.lnd/public")?;
     for macaroon in std::fs::read_dir("/root/.lnd/data/chain/bitcoin/mainnet")? {
@@ -619,5 +618,62 @@ fn main() -> Result<(), anyhow::Error> {
         }
     }
     File::create("/root/.lnd/public/tls.cert")?.write_all(tls_cert.as_bytes())?;
-    Ok(())
+    loop {
+        serde_yaml::to_writer(
+            File::create("/root/.lnd/start9/stats.yaml")?,
+            &Properties {
+                version: 2,
+                data: Data {
+                    sync_height: Property {
+                        value_type: "string",
+                        value: format!("{}", node_info.block_height),
+                        description: Some(
+                            "The latest block height that has been processed by LND".to_owned(),
+                        ),
+                        copyable: false,
+                        qr: false,
+                        masked: false,
+                    },
+                    synced_to_chain: Property {
+                        value_type: "string",
+                        value: if node_info.synced_to_chain {
+                            "✅".to_owned()
+                        } else {
+                            "❌".to_owned()
+                        },
+                        description: Some("Until this value is ✅, you may not be able to see transactions sent to your on chain wallet.".to_owned()),
+                        copyable: false,
+                        qr: false,
+                        masked: false,
+                    },
+                    synced_to_graph: Property {
+                        value_type: "string",
+                        value: if node_info.synced_to_graph {
+                            "✅".to_owned()
+                        } else {
+                            "❌".to_owned()
+                        },
+                        description: Some("Until this value is ✅, you will experience problems sending payments over lightning.".to_owned()),
+                        copyable: false,
+                        qr: false,
+                        masked: false,
+                    },
+                    lnd_connect_grpc: &lnd_connect_grpc,
+                    lnd_connect_rest: &lnd_connect_rest,
+                    node_uri: &node_uri,
+                },
+            },
+        )?;
+        std::thread::sleep(Duration::from_secs(10));
+        node_info = serde_json::from_slice(
+            &std::process::Command::new("curl")
+                .arg("--cacert")
+                .arg("/root/.lnd/tls.cert")
+                .arg("--header")
+                .arg(format!("Grpc-Metadata-macaroon: {}", mac_encoded))
+                .arg("https://localhost:8080/v1/getinfo")
+                .output()?
+                .stdout,
+        )?;
+    }
 }

@@ -16,7 +16,10 @@ On the LND page, scroll down to find the Bitcoin Proxy dependency. Click `Config
 
 Enter your LND-Connect QR code (located in `properties`) into any wallet that supports connecting to a remote LND node over Tor. For a list of compatible wallets, see <a href="https://github.com/start9labs/lnd-wrapper/blob/master/docs/wallets.md" target="_blank">https://github.com/start9labs/lnd-wrapper/blob/master/docs/wallets.md</a>.
 
-## Updates in the newest version (v0.11.1)
+## Depositing to LND
 
-- If you have configured an external wallet to work with LND prior to v0.11.1, you will need to set it up again by scanning the LND Connect URL.
-- There are two LND Connect URLs: gRPC and REST. Your wallet should specify which one it prefers. If it does not, try using gRPC first.
+When using LND or any wallet that is connected to LND it is important to note that until "Synced to Chain" in the Properties page is reporting ✅, your deposits to your LND on-chain wallet may not appear.
+
+## Sending payments over Lightning
+
+Once you have open channels and are ready to transact on the Lightning Network, it is important to note that until "Synced to Graph" in the Properties page is reporting ✅, you may experience problems finding routes to your destination.

@@ -23,6 +23,43 @@ accept-keysend:
   description: |
     Allow others to send payments directly to your public key through keysend instead of having to get a new invoice
   default: false
+accept-amp:
+  type: boolean
+  name: Accept Spontaneous AMPs
+  description: |
+    If true, spontaneous payments through AMP will be accepted. Payments to AMP
+    invoices will be accepted regardless of this setting.
+  default: false
+reject-htlc:
+  type: boolean
+  name: Reject Routing Requests
+  description: |
+    If true, LND will not forward any HTLCs that are meant as onward payments. This option will still allow LND to send
+    HTLCs and receive HTLCs but lnd won't be used as a hop.
+  default: false
+min-chan-size:
+  type: number
+  name: Minimum Channel Size
+  description: |
+    The smallest channel size (in satoshis) that we should accept. Incoming channels smaller than this will be rejected.
+  nullable: false
+  range: "[1,16777215]"
+  integral: true
+  default: 20000
+  units: satoshis
+max-chan-size:
+  type: number
+  name: Maximum Channel Size
+  description: |
+    The largest channel size (in satoshis) that we should accept. Incoming channels larger than this will be rejected.
+    For non-Wumbo channels this limit remains 16777215 satoshis by default as specified in BOLT-0002. For wumbo
+    channels this limit is 1,000,000,000 satoshis (10 BTC). Set this config option explicitly to restrict your maximum
+    channel size to better align with your risk tolerance
+  nullable: false
+  range: [1,1000000000]
+  integral: true
+  default: 16777215
+  units: satoshis
 bitcoind:
   type: union
   name: Bitcoin Core
@@ -233,6 +270,7 @@ autopilot:
           range: "[0,*)"
           integral: true
           default: 1
+          units: blocks
         confirmation-target:
           type: number
           name: Confirmation Target
@@ -241,6 +279,7 @@ autopilot:
           range: "[0,*)"
           integral: true
           default: 1
+          units: blocks
 watchtower-enabled:
   type: boolean
   name: Watchtower
@@ -258,6 +297,25 @@ advanced:
   nullable: false
   nullByDefault: false
   spec:
+    debug-level:
+      type: enum
+      name: Log Verbosity
+      values:
+        - trace
+        - debug
+        - info
+        - warn
+        - error
+        - critical
+      description: |
+        Sets the level of log filtration. Trace is the most verbose, Critical is the least.
+      default: info
+    db-bolt-no-freelist-sync:
+      type: boolean
+      name: Disallow Bolt DB Freelist Sync
+      description: |
+        If true, prevents the database from syncing its freelist to disk.
+      default: false
     db-bolt-auto-compact:
       type: boolean
       name: Compact Database on Startup
@@ -265,6 +323,26 @@ advanced:
         Performs database compaction on startup. This is necessary to keep disk usage down over time at the cost of
         having longer startup times.
       default: true
+    db-bolt-auto-compact-min-age:
+      type: number
+      name: Minimum Autocompaction Age for Bolt DB
+      description: |
+        How long ago (in hours) the last compaction of a database file must be for it to be considered for auto
+        compaction again. Can be set to 0 to compact on every startup.
+      nullable: false
+      range: "[0, *)"
+      integral: true
+      default: 168
+      units: hours
+    db-bolt-db-timeout:
+      type: number
+      name: Bolt DB Timeout
+      description: How long should LND try to open the database before giving up?
+      nullable: false
+      range: "[1, 86400]"
+      integral: true
+      default: 60
+      units: seconds
     recovery-window:
       type: number
       name: Recovery Window
@@ -277,15 +355,40 @@ advanced:
       type: number
       name: Payments Expiration Grace Period
       description: |
-        A period to wait before for closing channels with outgoing htlcs that have 
-        timed out and are a result of this nodes instead payment. In addition to our 
-        current block based deadline, is specified this grace period will also be taken
-        into account.
+        A period to wait before for closing channels with outgoing htlcs that have timed out and are a result of this
+        nodes instead payment. In addition to our current block based deadline, is specified this grace period will
+        also be taken into account.
       nullable: false
       range: "[1,*)"
       integral: true
       default: 30
       units: "seconds"
+    default-remote-max-htlcs:
+      type: number
+      name: Maximum Remote HTLCs
+      description: |
+        The default max_htlc applied when opening or accepting channels. This value limits the number of concurrent
+        HTLCs that the remote party can add to the commitment. The maximum possible value is 483.
+      nullable: false
+      range: "[1,483]"
+      integral: true
+      default: 483
+      units: htlcs
+    max-channel-fee-allocation:
+      type: number
+      name: Maximum Channel Fee Allocation
+      description: |
+        The maximum percentage of total funds that can be allocated to a channel's commitment fee. This only applies for
+        the initiator of the channel.
+      nullable: false
+      range: "[0.1, 1]"
+      integral: false
+      default: 0.5
+    max-commit-fee-rate-anchors: {}
+    protocol-wumbo-channels: {}
+    protocol-anchors: {}
+    protocol-no-anchors: {}
+    gc-cancelled-invoices-on-startup: {}
     bitcoin:
       type: object
       name: Bitcoin Channel Configuration

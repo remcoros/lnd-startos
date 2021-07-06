@@ -73,8 +73,8 @@ struct Config {
     accept_keysend: bool,
     accept_amp: bool,
     reject_htlc: bool,
-    min_chan_size: u64,
-    max_chan_size: u64,
+    min_chan_size: Option<u64>,
+    max_chan_size: Option<u64>,
     bitcoind: BitcoinCoreConfig,
     autopilot: AutoPilotConfig,
     watchtower_enabled: bool,
@@ -166,9 +166,9 @@ struct AdvancedConfig {
     max_channel_fee_allocation: f64,
     max_commit_fee_rate_anchors: usize,
     protocol_wumbo_channels: bool,
-    protocol_anchors: bool,
+    // protocol_anchors: bool,
     protocol_no_anchors: bool,
-    gc_cancelled_invoices_on_startup: bool,
+    gc_canceled_invoices_on_startup: bool,
     bitcoin: BitcoinChannelConfig,
 }
 
@@ -349,16 +349,22 @@ fn main() -> Result<(), anyhow::Error> {
             tor_address = tor_address,
             payments_expiration_grace_period = config.advanced.payments_expiration_grace_period,
             debug_level = config.advanced.debug_level,
-            min_chan_size = config.min_chan_size,
-            max_chan_size = config.max_chan_size,
+            min_chan_size_row = match config.min_chan_size {
+                None => String::new(),
+                Some(u) => format!("min_chan_size={}",u),
+            },
+            max_chan_size_row = match config.max_chan_size {
+                None => String::new(),
+                Some(u) => format!("max_chan_size={}",u),
+            },
             default_remote_max_htlcs = config.advanced.default_remote_max_htlcs,
             reject_htlc = config.reject_htlc,
             max_channel_fee_allocation = config.advanced.max_channel_fee_allocation,
             max_commit_fee_rate_anchors = config.advanced.max_commit_fee_rate_anchors,
             accept_keysend = config.accept_keysend,
             accept_amp = config.accept_amp,
-            protocol_anchors = config.advanced.protocol_anchors,
-            gc_cancelled_invoices_on_startup = config.advanced.gc_cancelled_invoices_on_startup,
+            // protocol_anchors = config.advanced.protocol_anchors,
+            gc_canceled_invoices_on_startup = config.advanced.gc_canceled_invoices_on_startup,
             alias = alias,
             color = config.color,
             bitcoin_default_chan_confs = config.advanced.bitcoin.default_channel_confirmations,
@@ -464,21 +470,58 @@ fn main() -> Result<(), anyhow::Error> {
         }
     }?;
 
-    let mut password_bytes = [0; 16];
+    let mut password_bytes = [0; 17];
     if Path::new("/root/.lnd/pwd.dat").exists() {
         let mut pass_file = File::open("/root/.lnd/pwd.dat")?;
-        pass_file.read_exact(&mut password_bytes)?;
-        let status = std::process::Command::new("curl")
-            .arg("-X")
-            .arg("POST")
-            .arg("--cacert")
-            .arg("/root/.lnd/tls.cert")
-            .arg("https://localhost:8080/v1/unlockwallet")
-            .arg("-d")
-            .arg(serde_json::to_string(&SkipNulls(serde_json::json!({
-                    "wallet_password": base64::encode(&password_bytes),
-                    "recovery_window": config.advanced.recovery_window,})))?)
-            .status()?;
+        pass_file.read_exact(&mut password_bytes[..16])?;
+        password_bytes[16] = b'\n';
+        let status = {
+            use std::process;
+            let mut res;
+            loop {
+                let mut cmd =
+                    match config.advanced.recovery_window {
+                        None => process::Command::new("lncli")
+                            .arg("unlock")
+                            .arg("--stdin")
+                            .stdin(process::Stdio::piped())
+                            .stdout(process::Stdio::piped())
+                            .stderr(process::Stdio::piped())
+                            .spawn()?,
+                        Some(w) => process::Command::new("lncli")
+                            .arg("unlock")
+                            .arg("--stdin")
+                            .arg("--recovery_window")
+                            .arg(format!("{}", w))
+                            .stdin(process::Stdio::piped())
+                            .stdout(process::Stdio::piped())
+                            .stderr(process::Stdio::piped())
+                            .spawn()?,
+                    };
+                cmd.stdin.take().ok_or(anyhow!("Failed to get lncli stdin"))?.write_all(&password_bytes)?;
+                res = cmd.wait_with_output()?;
+                let out = String::from_utf8(res.stdout)?;
+                let err = String::from_utf8(res.stderr)?;
+                println!("OUT: {}", out);
+                println!("ERR: {}", err);
+                println!("STAT: {}", res.status);
+                if !err.contains("waiting to start") {
+                    break;
+                }
+            }
+            res.status
+        };
+        // let status = std::process::Command::new("curl")
+        //     .arg("-X")
+        //     .arg("POST")
+        //     .arg("--cacert")
+        //     .arg("/root/.lnd/tls.cert")
+        //     .arg("https://localhost:8080/v1/unlockwallet")
+        //     .arg("-d")
+        //     .arg(serde_json::to_string(&SkipNulls(serde_json::json!({
+        //             "wallet_password": base64::encode(&password_bytes),
+        //             "recovery_window": config.advanced.recovery_window,})))?)
+        //     .status()?;
         if !status.success() {
             return Err(anyhow::anyhow!("Error unlocking wallet. Exiting."));
         } else {

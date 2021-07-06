@@ -42,10 +42,9 @@ min-chan-size:
   name: Minimum Channel Size
   description: |
     The smallest channel size (in satoshis) that we should accept. Incoming channels smaller than this will be rejected.
-  nullable: false
+  nullable: true
   range: "[1,16777215]"
   integral: true
-  default: 20000
   units: satoshis
 max-chan-size:
   type: number
@@ -55,10 +54,9 @@ max-chan-size:
     For non-Wumbo channels this limit remains 16777215 satoshis by default as specified in BOLT-0002. For wumbo
     channels this limit is 1,000,000,000 satoshis (10 BTC). Set this config option explicitly to restrict your maximum
     channel size to better align with your risk tolerance
-  nullable: false
-  range: [1,1000000000]
+  nullable: true
+  range: "[1,1000000000]"
   integral: true
-  default: 16777215
   units: satoshis
 bitcoind:
   type: union
@@ -384,11 +382,46 @@ advanced:
       range: "[0.1, 1]"
       integral: false
       default: 0.5
-    max-commit-fee-rate-anchors: {}
-    protocol-wumbo-channels: {}
-    protocol-anchors: {}
-    protocol-no-anchors: {}
-    gc-cancelled-invoices-on-startup: {}
+    max-commit-fee-rate-anchors:
+      type: number
+      name: Maximum Commitment Fee for Anchor Channels
+      description: |
+        The maximum fee rate in sat/vbyte that will be used for commitments of channels of the anchors type. Must be
+        large enough to ensure transaction propagation.
+      nullable: false
+      range: "[1,*)"
+      integral: true
+      default: 10
+    protocol-wumbo-channels:
+      type: boolean
+      name: Enable Wumbo Channels
+      description: |
+        If set, then lnd will create and accept requests for channels larger than 0.16 BTC
+      nullable: false
+      default: false
+    # protocol-anchors:
+    #   type: boolean
+    #   name: Make Anchor Channels by Default
+    #   description: |
+    #     If set, lnd will use anchor channels by default if the remote channel party supports them. Note that lnd will
+    #     require 1 UTXO to be reserved for this channel type if it is enabled.
+    #   nullable: false
+    #   default: false
+    protocol-no-anchors:
+      type: boolean
+      name: Disable Anchor Channels
+      description: |
+        Set to disable support for anchor commitments. Anchor channels allow you to determine your fees at close time by
+        using a Child Pays For Parent transaction.
+      nullable: false
+      default: false
+    gc-canceled-invoices-on-startup:
+      type: boolean
+      name: Cleanup Canceled Invoices on Startup
+      description: |
+        If true, LND will attempt to garbage collect canceled invoices upon start.
+      nullable: false
+      default: false
     bitcoin:
       type: object
       name: Bitcoin Channel Configuration

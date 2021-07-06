@@ -6,16 +6,15 @@ listen=0.0.0.0:9735
 rpclisten=0.0.0.0:10009
 restlisten=0.0.0.0:8080
 debuglevel={debug_level}
-minchansize={min_chan_size}
-maxchansize={max_chan_size}
+{min_chan_size_row}
+{max_chan_size_row}
 default-remote-max-htlcs={default_remote_max_htlcs}
 rejecthtlc={reject_htlc}
 max-channel-fee-allocation={max_channel_fee_allocation}
 max-commit-fee-rate-anchors={max_commit_fee_rate_anchors}
 accept-keysend={accept_keysend}
 accept-amp={accept_amp}
-protocol.anchors={protocol_anchors}
-gc-cancelled-invoices-on-startup={gc_cancelled_invoices_on_startup}
+gc-canceled-invoices-on-startup={gc_canceled_invoices_on_startup}
 alias={alias}
 color=#{color}
 

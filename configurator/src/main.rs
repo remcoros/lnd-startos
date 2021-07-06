@@ -99,8 +99,7 @@ struct BitcoinChannelConfig {
 enum BitcoinCoreConfig {
     #[serde(rename_all = "kebab-case")]
     Internal {
-        rpc_address: IpAddr,
-        zmq_address: IpAddr,
+        bitcoind_address: IpAddr,
         user: String,
         password: String,
     },
@@ -288,16 +287,15 @@ fn main() -> Result<(), anyhow::Error> {
             bitcoind_zmq_tx_port,
         ) = match config.bitcoind {
             BitcoinCoreConfig::Internal {
-                rpc_address,
-                zmq_address,
+                bitcoind_address,
                 user,
                 password,
             } => (
                 user,
                 password,
-                format!("{}", rpc_address),
+                format!("{}", bitcoind_address),
                 8332,
-                format!("{}", zmq_address),
+                format!("{}", bitcoind_address),
                 28332,
                 28333,
             ),

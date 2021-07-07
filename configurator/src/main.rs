@@ -216,7 +216,7 @@ pub struct RestoreInfo {
     os_version: emver::Version,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Debug)]
 pub struct LndGetInfoRes {
     identity_pubkey: String,
     block_height: u32,
@@ -498,28 +498,13 @@ fn main() -> Result<(), anyhow::Error> {
                     };
                 cmd.stdin.take().ok_or(anyhow!("Failed to get lncli stdin"))?.write_all(&password_bytes)?;
                 res = cmd.wait_with_output()?;
-                let out = String::from_utf8(res.stdout)?;
                 let err = String::from_utf8(res.stderr)?;
-                println!("OUT: {}", out);
-                println!("ERR: {}", err);
-                println!("STAT: {}", res.status);
                 if !err.contains("waiting to start") {
                     break;
                 }
             }
             res.status
         };
-        // let status = std::process::Command::new("curl")
-        //     .arg("-X")
-        //     .arg("POST")
-        //     .arg("--cacert")
-        //     .arg("/root/.lnd/tls.cert")
-        //     .arg("https://localhost:8080/v1/unlockwallet")
-        //     .arg("-d")
-        //     .arg(serde_json::to_string(&SkipNulls(serde_json::json!({
-        //             "wallet_password": base64::encode(&password_bytes),
-        //             "recovery_window": config.advanced.recovery_window,})))?)
-        //     .status()?;
         if !status.success() {
             return Err(anyhow::anyhow!("Error unlocking wallet. Exiting."));
         } else {
@@ -601,7 +586,7 @@ fn main() -> Result<(), anyhow::Error> {
     while local_port_available(8080)? {
         std::thread::sleep(Duration::from_secs(10))
     }
-    let mut node_info: LndGetInfoRes = serde_json::from_slice(
+    let mut node_info: LndGetInfoRes = retry::<_, _, anyhow::Error>(|| serde_json::from_slice(
         &std::process::Command::new("curl")
             .arg("--cacert")
             .arg("/root/.lnd/tls.cert")
@@ -610,7 +595,7 @@ fn main() -> Result<(), anyhow::Error> {
             .arg("https://localhost:8080/v1/getinfo")
             .output()?
             .stdout,
-    )?;
+    ).map_err(|e| e.into::<>()), 5, Duration::from_secs(1))?;
     let lnd_connect_grpc = Property {
         value_type: "string",
         value: format!(
@@ -745,6 +730,15 @@ fn main() -> Result<(), anyhow::Error> {
                 .arg("https://localhost:8080/v1/getinfo")
                 .output()?
                 .stdout,
-        )?;
+        ).or::<anyhow::Error>(Ok(node_info))?;
     }
+}
+
+fn retry<F: FnMut() -> Result<A,E>, A,E>(mut action: F, retries: usize, duration: Duration) -> Result<A,E> {
+    action().or_else(|e| if retries == 0 {
+        Err(e)
+    } else {
+        std::thread::sleep(duration);
+        retry(action, retries - 1, duration)
+    })
 }

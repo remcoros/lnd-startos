@@ -165,7 +165,6 @@ struct AdvancedConfig {
     max_channel_fee_allocation: f64,
     max_commit_fee_rate_anchors: usize,
     protocol_wumbo_channels: bool,
-    // protocol_anchors: bool,
     protocol_no_anchors: bool,
     gc_canceled_invoices_on_startup: bool,
     bitcoin: BitcoinChannelConfig,

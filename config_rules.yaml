@@ -1,5 +1,3 @@
 ---
 - rule: '!(max-chan-size?) OR !(min-chan-size?) OR (#max-chan-size > #min-chan-size)'
   description: "Maximum Channel Size must exceed Minimum Channel Size"
-- rule: '!(advanced.protocol-anchors? AND advanced.protocol-no-anchors?)'
-  description: "Anchors cannot be default channel type if you have disabled them"

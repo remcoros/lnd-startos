@@ -27,7 +27,7 @@ accept-amp:
   type: boolean
   name: Accept Spontaneous AMPs
   description: |
-    If true, spontaneous payments through AMP will be accepted. Payments to AMP
+    If enabled, spontaneous payments through AMP will be accepted. Payments to AMP
     invoices will be accepted regardless of this setting.
   default: false
 reject-htlc:
@@ -41,7 +41,7 @@ min-chan-size:
   type: number
   name: Minimum Channel Size
   description: |
-    The smallest channel size (in satoshis) that we should accept. Incoming channels smaller than this will be rejected.
+    The smallest channel size that we should accept. Incoming channels smaller than this will be rejected.
   nullable: true
   range: "[1,16777215]"
   integral: true
@@ -50,7 +50,7 @@ max-chan-size:
   type: number
   name: Maximum Channel Size
   description: |
-    The largest channel size (in satoshis) that we should accept. Incoming channels larger than this will be rejected.
+    The largest channel size that we should accept. Incoming channels larger than this will be rejected.
     For non-Wumbo channels this limit remains 16777215 satoshis by default as specified in BOLT-0002. For wumbo
     channels this limit is 1,000,000,000 satoshis (10 BTC). Set this config option explicitly to restrict your maximum
     channel size to better align with your risk tolerance
@@ -392,14 +392,6 @@ advanced:
         If set, then lnd will create and accept requests for channels larger than 0.16 BTC
       nullable: false
       default: false
-    # protocol-anchors:
-    #   type: boolean
-    #   name: Make Anchor Channels by Default
-    #   description: |
-    #     If set, lnd will use anchor channels by default if the remote channel party supports them. Note that lnd will
-    #     require 1 UTXO to be reserved for this channel type if it is enabled.
-    #   nullable: false
-    #   default: false
     protocol-no-anchors:
       type: boolean
       name: Disable Anchor Channels

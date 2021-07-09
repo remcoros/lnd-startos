@@ -1,13 +1,22 @@
 [Application Options]
+tlsextradomain={tor_address}
 externalhosts={tor_address}
 payments-expiration-grace-period={payments_expiration_grace_period}s
 listen=0.0.0.0:9735
 rpclisten=0.0.0.0:10009
 restlisten=0.0.0.0:8080
-tlsextradomain={tor_address}
+debuglevel={debug_level}
+{min_chan_size_row}
+{max_chan_size_row}
+default-remote-max-htlcs={default_remote_max_htlcs}
+rejecthtlc={reject_htlc}
+max-channel-fee-allocation={max_channel_fee_allocation}
+max-commit-fee-rate-anchors={max_commit_fee_rate_anchors}
+accept-keysend={accept_keysend}
+accept-amp={accept_amp}
+gc-canceled-invoices-on-startup={gc_canceled_invoices_on_startup}
 alias={alias}
 color=#{color}
-accept-keysend={accept_keysend}
 
 [Bitcoin]
 bitcoin.active=true
@@ -49,5 +58,15 @@ watchtower.externalip={tor_address}:9911
 [wtclient]
 wtclient.active={watchtower_client_enabled}
 
+[healthcheck]
+healthcheck.chainbackend.attempts=5
+
+[protocol]
+protocol.wumbo-channels={protocol_wumbo_channels}
+protocol.no-anchors={protocol_no_anchors}
+
 [bolt]
+db.bolt.nofreelistsync={db_bolt_no_freelist_sync}
 db.bolt.auto-compact={db_bolt_auto_compact}
+db.bolt.auto-compact-min-age={db_bolt_auto_compact_min_age}h
+db.bolt.dbtimeout={db_bolt_db_timeout}s

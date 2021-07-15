@@ -99,7 +99,8 @@ struct BitcoinChannelConfig {
 enum BitcoinCoreConfig {
     #[serde(rename_all = "kebab-case")]
     Internal {
-        bitcoind_address: IpAddr,
+        rpc_address: IpAddr,
+        zmq_address: IpAddr,
         user: String,
         password: String,
     },
@@ -286,15 +287,16 @@ fn main() -> Result<(), anyhow::Error> {
             bitcoind_zmq_tx_port,
         ) = match config.bitcoind {
             BitcoinCoreConfig::Internal {
-                bitcoind_address,
+                rpc_address,
+                zmq_address,
                 user,
                 password,
             } => (
                 user,
                 password,
-                format!("{}", bitcoind_address),
+                format!("{}", rpc_address),
                 8332,
-                format!("{}", bitcoind_address),
+                format!("{}", zmq_address),
                 28332,
                 28333,
             ),
@@ -348,11 +350,11 @@ fn main() -> Result<(), anyhow::Error> {
             debug_level = config.advanced.debug_level,
             min_chan_size_row = match config.min_chan_size {
                 None => String::new(),
-                Some(u) => format!("min_chan_size={}",u),
+                Some(u) => format!("min_chan_size={}", u),
             },
             max_chan_size_row = match config.max_chan_size {
                 None => String::new(),
-                Some(u) => format!("max_chan_size={}",u),
+                Some(u) => format!("max_chan_size={}", u),
             },
             default_remote_max_htlcs = config.advanced.default_remote_max_htlcs,
             reject_htlc = config.reject_htlc,
@@ -476,26 +478,28 @@ fn main() -> Result<(), anyhow::Error> {
             use std::process;
             let mut res;
             loop {
-                let mut cmd =
-                    match config.advanced.recovery_window {
-                        None => process::Command::new("lncli")
-                            .arg("unlock")
-                            .arg("--stdin")
-                            .stdin(process::Stdio::piped())
-                            .stdout(process::Stdio::piped())
-                            .stderr(process::Stdio::piped())
-                            .spawn()?,
-                        Some(w) => process::Command::new("lncli")
-                            .arg("unlock")
-                            .arg("--stdin")
-                            .arg("--recovery_window")
-                            .arg(format!("{}", w))
-                            .stdin(process::Stdio::piped())
-                            .stdout(process::Stdio::piped())
-                            .stderr(process::Stdio::piped())
-                            .spawn()?,
-                    };
-                cmd.stdin.take().ok_or(anyhow!("Failed to get lncli stdin"))?.write_all(&password_bytes)?;
+                let mut cmd = match config.advanced.recovery_window {
+                    None => process::Command::new("lncli")
+                        .arg("unlock")
+                        .arg("--stdin")
+                        .stdin(process::Stdio::piped())
+                        .stdout(process::Stdio::piped())
+                        .stderr(process::Stdio::piped())
+                        .spawn()?,
+                    Some(w) => process::Command::new("lncli")
+                        .arg("unlock")
+                        .arg("--stdin")
+                        .arg("--recovery_window")
+                        .arg(format!("{}", w))
+                        .stdin(process::Stdio::piped())
+                        .stdout(process::Stdio::piped())
+                        .stderr(process::Stdio::piped())
+                        .spawn()?,
+                };
+                cmd.stdin
+                    .take()
+                    .ok_or(anyhow!("Failed to get lncli stdin"))?
+                    .write_all(&password_bytes)?;
                 res = cmd.wait_with_output()?;
                 let err = String::from_utf8(res.stderr)?;
                 if !err.contains("waiting to start") {
@@ -585,16 +589,23 @@ fn main() -> Result<(), anyhow::Error> {
     while local_port_available(8080)? {
         std::thread::sleep(Duration::from_secs(10))
     }
-    let mut node_info: LndGetInfoRes = retry::<_, _, anyhow::Error>(|| serde_json::from_slice(
-        &std::process::Command::new("curl")
-            .arg("--cacert")
-            .arg("/root/.lnd/tls.cert")
-            .arg("--header")
-            .arg(format!("Grpc-Metadata-macaroon: {}", mac_encoded))
-            .arg("https://localhost:8080/v1/getinfo")
-            .output()?
-            .stdout,
-    ).map_err(|e| e.into::<>()), 5, Duration::from_secs(1))?;
+    let mut node_info: LndGetInfoRes = retry::<_, _, anyhow::Error>(
+        || {
+            serde_json::from_slice(
+                &std::process::Command::new("curl")
+                    .arg("--cacert")
+                    .arg("/root/.lnd/tls.cert")
+                    .arg("--header")
+                    .arg(format!("Grpc-Metadata-macaroon: {}", mac_encoded))
+                    .arg("https://localhost:8080/v1/getinfo")
+                    .output()?
+                    .stdout,
+            )
+            .map_err(|e| e.into())
+        },
+        5,
+        Duration::from_secs(1),
+    )?;
     let lnd_connect_grpc = Property {
         value_type: "string",
         value: format!(
@@ -729,15 +740,22 @@ fn main() -> Result<(), anyhow::Error> {
                 .arg("https://localhost:8080/v1/getinfo")
                 .output()?
                 .stdout,
-        ).or::<anyhow::Error>(Ok(node_info))?;
+        )
+        .or::<anyhow::Error>(Ok(node_info))?;
     }
 }
 
-fn retry<F: FnMut() -> Result<A,E>, A,E>(mut action: F, retries: usize, duration: Duration) -> Result<A,E> {
-    action().or_else(|e| if retries == 0 {
-        Err(e)
-    } else {
-        std::thread::sleep(duration);
-        retry(action, retries - 1, duration)
+fn retry<F: FnMut() -> Result<A, E>, A, E>(
+    mut action: F,
+    retries: usize,
+    duration: Duration,
+) -> Result<A, E> {
+    action().or_else(|e| {
+        if retries == 0 {
+            Err(e)
+        } else {
+            std::thread::sleep(duration);
+            retry(action, retries - 1, duration)
+        }
     })
 }

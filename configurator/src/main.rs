@@ -469,11 +469,12 @@ fn main() -> Result<(), anyhow::Error> {
         }
     }?;
 
-    let mut password_bytes = [0; 17];
     if Path::new("/root/.lnd/pwd.dat").exists() {
-        let mut pass_file = File::open("/root/.lnd/pwd.dat")?;
-        pass_file.read_exact(&mut password_bytes[..16])?;
-        password_bytes[16] = b'\n';
+        let pass_file = File::open("/root/.lnd/pwd.dat")?;
+        let pass_size = pass_file.metadata().unwrap().len();
+        let mut password_bytes = Vec::with_capacity((pass_size + 1) as usize);
+        pass_file.take(pass_size).read_to_end(&mut password_bytes)?;
+        password_bytes.push(b'\n');
         let status = {
             use std::process;
             let mut res;
@@ -541,6 +542,7 @@ fn main() -> Result<(), anyhow::Error> {
             }
         }
     } else {
+        let mut password_bytes = [0; 16];
         let mut dev_random = File::open("/dev/random")?;
         dev_random.read_exact(&mut password_bytes)?;
         let output = std::process::Command::new("curl")

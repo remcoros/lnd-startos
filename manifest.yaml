@@ -1,6 +1,6 @@
 compat: v0
 id: lnd
-version: 0.13.0.1
+version: 0.13.0.2
 title: Lightning Network Daemon
 description:
   short: "A complete implementation of a Lightning Network node by Lightning Labs"
@@ -8,6 +8,7 @@ description:
 release-notes: |
   - https://github.com/lightningnetwork/lnd/releases/tag/v0.13.0-beta
   - Reintroduce Bitcoin Proxy as a dependency to deal with pruning problems
+  - Fix bug where wallet would not unlock after initially created
 ports:
   - internal: 8080
     tor: 8080

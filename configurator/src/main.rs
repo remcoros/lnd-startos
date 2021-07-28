@@ -472,47 +472,72 @@ fn main() -> Result<(), anyhow::Error> {
     if Path::new("/root/.lnd/pwd.dat").exists() {
         let pass_file = File::open("/root/.lnd/pwd.dat")?;
         let pass_size = pass_file.metadata().unwrap().len();
-        let mut password_bytes = Vec::with_capacity((pass_size + 1) as usize);
+        let mut password_bytes = Vec::with_capacity(pass_size as usize);
         pass_file.take(pass_size).read_to_end(&mut password_bytes)?;
-        password_bytes.push(b'\n');
+        // password_bytes.push(b'\n');
         let status = {
             use std::process;
             let mut res;
+            let stat;
             loop {
-                let mut cmd = match config.advanced.recovery_window {
-                    None => process::Command::new("lncli")
-                        .arg("unlock")
-                        .arg("--stdin")
-                        .stdin(process::Stdio::piped())
-                        .stdout(process::Stdio::piped())
-                        .stderr(process::Stdio::piped())
-                        .spawn()?,
-                    Some(w) => process::Command::new("lncli")
-                        .arg("unlock")
-                        .arg("--stdin")
-                        .arg("--recovery_window")
-                        .arg(format!("{}", w))
-                        .stdin(process::Stdio::piped())
-                        .stdout(process::Stdio::piped())
-                        .stderr(process::Stdio::piped())
-                        .spawn()?,
-                };
-                cmd.stdin
-                    .take()
-                    .ok_or(anyhow!("Failed to get lncli stdin"))?
-                    .write_all(&password_bytes)?;
+                let cmd = process::Command::new("curl")
+                    .arg("-X")
+                    .arg("POST")
+                    .arg("--cacert")
+                    .arg("/root/.lnd/tls.cert")
+                    .arg("https://localhost:8080/v1/unlockwallet")
+                    .arg("-d")
+                    .arg(serde_json::to_string(&SkipNulls(serde_json::json!({
+                        "wallet_password": base64::encode(&password_bytes),
+                        "recovery_window": config.advanced.recovery_window,
+                    })))?)
+                    .stdin(process::Stdio::piped())
+                    .stdout(process::Stdio::piped())
+                    .stderr(process::Stdio::piped())
+                    .spawn()?;
                 res = cmd.wait_with_output()?;
-                let err = String::from_utf8(res.stderr)?;
-                if !err.contains("waiting to start") {
-                    break;
+                let output = String::from_utf8(res.stdout)?.parse::<Value>()?;
+                match output.as_object() {
+                    None => {
+                        stat = Err(anyhow::anyhow!(
+                            "Invalid output from wallet unlock attempt: {:?}",
+                            output
+                        ));
+                        break;
+                    }
+                    Some(o) => match o.get("error") {
+                        None => {
+                            stat = Ok(output);
+                            break;
+                        }
+                        Some(v) => match v.as_str() {
+                            None => {
+                                stat = Err(anyhow::anyhow!(
+                                    "Invalid error output from wallet unlock attempt: {:?}",
+                                    v
+                                ));
+                                break;
+                            }
+                            Some(s) => {
+                                if s.contains("waiting to start") {
+                                    continue;
+                                } else {
+                                    stat = Err(anyhow::anyhow!("{}", s));
+                                    break;
+                                }
+                            }
+                        },
+                    },
                 }
             }
-            res.status
+            stat
         };
-        if !status.success() {
-            return Err(anyhow::anyhow!("Error unlocking wallet. Exiting."));
-        } else {
-            match use_channel_backup_data {
+        match status {
+            Err(e) => {
+                println!("{}", e);
+                return Err(anyhow::anyhow!("Error unlocking wallet. Exiting."));
+            }
+            Ok(_) => match use_channel_backup_data {
                 None => (),
                 Some(backups) => {
                     while local_port_available(8080)? {
@@ -539,7 +564,7 @@ fn main() -> Result<(), anyhow::Error> {
                         reset_restore(Path::new("/root/.lnd"))?;
                     }
                 }
-            }
+            },
         }
     } else {
         let mut password_bytes = [0; 16];

@@ -474,7 +474,6 @@ fn main() -> Result<(), anyhow::Error> {
         let pass_size = pass_file.metadata().unwrap().len();
         let mut password_bytes = Vec::with_capacity(pass_size as usize);
         pass_file.take(pass_size).read_to_end(&mut password_bytes)?;
-        // password_bytes.push(b'\n');
         let status = {
             use std::process;
             let mut res;

@@ -10,6 +10,7 @@ release-notes: |
   - Reintroduce Bitcoin Proxy as a dependency to deal with pruning problems
   - Fix bug where wallet would not unlock after initially created
   - Fix bug where wallet would not unlock if certain byte sequences were in generated password
+  - Fix bug where minimum and maximum channel size config options wouldn't work properly
 ports:
   - internal: 8080
     tor: 8080

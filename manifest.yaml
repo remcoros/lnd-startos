@@ -1,6 +1,6 @@
 compat: v0
 id: lnd
-version: 0.13.0.3
+version: 0.13.0.4
 title: Lightning Network Daemon
 description:
   short: "A complete implementation of a Lightning Network node by Lightning Labs"

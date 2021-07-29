@@ -350,11 +350,11 @@ fn main() -> Result<(), anyhow::Error> {
             debug_level = config.advanced.debug_level,
             min_chan_size_row = match config.min_chan_size {
                 None => String::new(),
-                Some(u) => format!("min_chan_size={}", u),
+                Some(u) => format!("minchansize={}", u),
             },
             max_chan_size_row = match config.max_chan_size {
                 None => String::new(),
-                Some(u) => format!("max_chan_size={}", u),
+                Some(u) => format!("maxchansize={}", u),
             },
             default_remote_max_htlcs = config.advanced.default_remote_max_htlcs,
             reject_htlc = config.reject_htlc,

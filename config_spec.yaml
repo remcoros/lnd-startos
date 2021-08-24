@@ -53,7 +53,7 @@ max-chan-size:
     The largest channel size that we should accept. Incoming channels larger than this will be rejected.
     For non-Wumbo channels this limit remains 16777215 satoshis by default as specified in BOLT-0002. For wumbo
     channels this limit is 1,000,000,000 satoshis (10 BTC). Set this config option explicitly to restrict your maximum
-    channel size to better align with your risk tolerance
+    channel size to better align with your risk tolerance.  Don't forget to enable Wumbo channels under 'Advanced,' if desired.
   nullable: true
   range: "[1,1000000000]"
   integral: true

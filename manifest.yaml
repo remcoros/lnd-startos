@@ -1,16 +1,12 @@
 compat: v0
 id: lnd
-version: 0.13.0.4
+version: 0.13.3
 title: Lightning Network Daemon
 description:
   short: "A complete implementation of a Lightning Network node by Lightning Labs"
   long: "LND fully conforms to the Lightning Network specification (BOLTs). BOLT stands for: Basis of Lightning Technology. In the current state lnd is capable of: creating channels, closing channels, managing all channel states (including the exceptional ones!), maintaining a fully authenticated+validated channel graph, performing path finding within the network, passively forwarding incoming payments, sending outgoing onion-encrypted payments through the network, updating advertised fee schedules, and automatic channel management (autopilot)."
 release-notes: |
-  - https://github.com/lightningnetwork/lnd/releases/tag/v0.13.0-beta
-  - Reintroduce Bitcoin Proxy as a dependency to deal with pruning problems
-  - Fix bug where wallet would not unlock after initially created
-  - Fix bug where wallet would not unlock if certain byte sequences were in generated password
-  - Fix bug where minimum and maximum channel size config options wouldn't work properly
+  - https://github.com/lightningnetwork/lnd/releases/tag/v0.13.3-beta
 ports:
   - internal: 8080
     tor: 8080

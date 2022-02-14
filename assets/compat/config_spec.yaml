@@ -1,17 +1,41 @@
+control-tor-address:
+  name: Control Tor Address
+  description: The Tor address for the control interface. 
+  type: pointer
+  subtype: package
+  package-id: lnd
+  target: tor-address
+  interface: control
+peer-tor-address:
+  name: Peer Tor Address
+  description: The Tor address for the peer interface. 
+  type: pointer
+  subtype: package
+  package-id: lnd
+  target: tor-address
+  interface: peer
+watchtower-tor-address:
+  name: Watchtower Tor Address
+  description: The Tor address for the watchtower interface. 
+  type: pointer
+  subtype: package
+  package-id: lnd
+  target: tor-address
+  interface: watchtower
 alias:
   type: string
   name: Alias
   description: The public, human-readable name of your Lightning node
   nullable: true
   pattern: ".{1,32}"
-  patternDescription: Must be at least 1 character and no more than 32 characters
+  pattern-description: Must be at least 1 character and no more than 32 characters
 color:
   type: string
   name: Color
   description: The public color dot of your Lightning node
   nullable: false
   pattern: "[0-9a-fA-F]{6}"
-  patternDescription: |
+  pattern-description: |
     Must be a valid 6 digit hexadecimal RGB value. The first two digits are red, middle two are green, and final two are
     blue
   default:
@@ -68,7 +92,7 @@ bitcoind:
   tag:
     id: type
     name: Type
-    variantNames:
+    variant-names:
       internal: Internal
       external: External
     description: |
@@ -78,36 +102,26 @@ bitcoind:
   default: internal
   variants:
     internal:
-      rpc-address:
-        type: pointer
-        name: Local RPC Address
-        description: The LAN IP address of your Bitcoin Proxy service
-        subtype: app
-        app-id: btc-rpc-proxy
-        target: lan-address
-      zmq-address:
-        type: pointer
-        name: Local ZeroMQ Address
-        description: The LAN IP address of your Bitcoin Core service
-        subtype: app
-        app-id: bitcoind
-        target: lan-address
       user:
         type: pointer
         name: RPC Username
         description: The username for the RPC user allocated to lnd
-        subtype: app
-        app-id: btc-rpc-proxy
+        subtype: package
+        package-id: btc-rpc-proxy
         target: config
-        index: 'users.[first(item => ''item.name = "lnd")].name'
+        multi: false
+        selector: '$.users[?(@.name == "lnd")].name'
+        # index: 'users.[first(item => ''item.name = "lnd")].name'
       password:
         type: pointer
         name: RPC Password
         description: The password for the RPC user allocated to lnd
-        subtype: app
-        app-id: btc-rpc-proxy
+        subtype: package
+        package-id: btc-rpc-proxy
         target: config
-        index: 'users.[first(item => ''item.name = "lnd")].password'
+        multi: false
+        selector: '$.users[?(@.name == "lnd")].password'
+        # index: 'users.[first(item => ''item.name = "lnd")].password'
     external:
       connection-settings:
         type: union
@@ -119,7 +133,7 @@ bitcoind:
           description: |
             - Manual: Raw information for finding a Bitcoin Core node
             - Quick Connect: A Quick Connect URL for a Bitcoin Core node
-          variantNames:
+          variant-names:
             manual: Manual
             quick-connect: Quick Connect
         default: quick-connect
@@ -173,7 +187,7 @@ bitcoind:
                 NOTE: LND will not accept a .onion url for this option
               nullable: false
               pattern: 'btcstandup://[^:]*:[^@]*@[a-zA-Z0-9.-]+:[0-9]+(/(\?(label=.+)?)?)?'
-              patternDescription: Must be a valid Quick Connect URL. For help, check out https://github.com/BlockchainCommons/Gordian/blob/master/Docs/Quick-Connect-API.md
+              pattern-description: Must be a valid Quick Connect URL. For help, check out https://github.com/BlockchainCommons/Gordian/blob/master/Docs/Quick-Connect-API.md
             zmq-block-port:
               type: number
               name: ZeroMQ Block Port
@@ -195,15 +209,15 @@ autopilot:
   name: Autopilot
   description: Autopilot Settings
   nullable: false
-  nullByDefault: false
   spec:
     enabled:
       type: boolean
       name: Enabled
       description: |
         If the autopilot agent should be active or not. The autopilot agent will
-        attempt to automatically open up channels to put your node in an advantageous
-        position within the network graph.
+        attempt to AUTOMATICALLY OPEN CHANNELS to put your node in an advantageous
+        position within the network graph.  DO NOT ENABLE THIS IF YOU WANT TO MANAGE 
+        CHANNELS MANUALLY OR DO NOT UNDERSTAND IT.
       default: false
     private:
       type: boolean
@@ -256,7 +270,6 @@ autopilot:
       name: Advanced
       description: Advanced Options
       nullable: false
-      nullByDefault: false
       spec:
         min-confirmations:
           type: number
@@ -293,7 +306,6 @@ advanced:
   name: Advanced
   description: Advanced Options
   nullable: false
-  nullByDefault: false
   spec:
     debug-level:
       type: enum
@@ -419,7 +431,6 @@ advanced:
       name: Bitcoin Channel Configuration
       description: Configuration options for lightning network channel management operating over the Bitcoin network
       nullable: false
-      nullByDefault: false
       spec:
         default-channel-confirmations:
           type: number

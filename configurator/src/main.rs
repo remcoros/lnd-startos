@@ -1,5 +1,6 @@
 use rand::Rng;
 use serde_json::Value;
+use std::env::var;
 use std::fs::File;
 use std::net::{IpAddr, SocketAddr};
 use std::path::Path;
@@ -68,6 +69,9 @@ impl std::fmt::Display for SkipNulls {
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct Config {
+    control_tor_address: String,
+    peer_tor_address: String,
+    watchtower_tor_address: String,
     alias: Option<String>,
     color: String,
     accept_keysend: bool,
@@ -98,12 +102,7 @@ struct BitcoinChannelConfig {
 #[serde(rename_all = "kebab-case")]
 enum BitcoinCoreConfig {
     #[serde(rename_all = "kebab-case")]
-    Internal {
-        rpc_address: IpAddr,
-        zmq_address: IpAddr,
-        user: String,
-        password: String,
-    },
+    Internal { user: String, password: String },
     #[serde(rename_all = "kebab-case")]
     External {
         connection_settings: ExternalBitcoinCoreConfig,
@@ -271,9 +270,19 @@ pub fn local_port_available(port: u16) -> Result<bool, anyhow::Error> {
 }
 
 fn main() -> Result<(), anyhow::Error> {
+    while !Path::new("/root/.lnd/start9/config.yaml").exists() {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
     let config: Config = serde_yaml::from_reader(File::open("/root/.lnd/start9/config.yaml")?)?;
+    println!(
+        "config fetched. alias = {:?}",
+        config.alias.clone().unwrap_or("No alias found".to_owned())
+    );
     let alias = get_alias(&config)?;
-    let tor_address = std::env::var("TOR_ADDRESS")?;
+    println!("alias = {:?}", alias);
+    let control_tor_address: String = config.control_tor_address;
+    let watchtower_tor_address: String = config.watchtower_tor_address;
+    let peer_tor_address: String = config.peer_tor_address;
     {
         let mut outfile = File::create("/root/.lnd/lnd.conf")?;
 
@@ -286,17 +295,12 @@ fn main() -> Result<(), anyhow::Error> {
             bitcoind_zmq_block_port,
             bitcoind_zmq_tx_port,
         ) = match config.bitcoind {
-            BitcoinCoreConfig::Internal {
-                rpc_address,
-                zmq_address,
+            BitcoinCoreConfig::Internal { user, password } => (
                 user,
                 password,
-            } => (
-                user,
-                password,
-                format!("{}", rpc_address),
+                format!("btc-rpc-proxy.embassy"),
                 8332,
-                format!("{}", zmq_address),
+                format!("bitcoind.embassy"),
                 28332,
                 28333,
             ),
@@ -340,12 +344,13 @@ fn main() -> Result<(), anyhow::Error> {
                 )
             }
         };
-        let tor_proxy: SocketAddr = (std::env::var("HOST_IP")?.parse::<IpAddr>()?, 9050).into();
-
+        let tor_proxy: SocketAddr = (var("HOST_IP").unwrap().parse::<IpAddr>()?, 9050).into();
+        println!("tor_proxy={}", tor_proxy);
         write!(
             outfile,
             include_str!("lnd.conf.template"),
-            tor_address = tor_address,
+            control_tor_address = control_tor_address,
+            watchtower_tor_address = watchtower_tor_address,
             payments_expiration_grace_period = config.advanced.payments_expiration_grace_period,
             debug_level = config.advanced.debug_level,
             min_chan_size_row = match config.min_chan_size {
@@ -414,7 +419,9 @@ fn main() -> Result<(), anyhow::Error> {
         match ext {
             x509_parser::extensions::ParsedExtension::SubjectAlternativeName(names) => {
                 if !(&names.general_names).into_iter().any(|a| match *a {
-                    x509_parser::extensions::GeneralName::DNSName(host) => host == tor_address,
+                    x509_parser::extensions::GeneralName::DNSName(host) => {
+                        host == control_tor_address
+                    }
                     _ => false,
                 }) {
                     println!("Replacing Certificates");
@@ -457,6 +464,9 @@ fn main() -> Result<(), anyhow::Error> {
                 Path::new("/root/.lnd/data/chain/bitcoin/mainnet/channel.backup");
             if channel_backup_path.exists() {
                 let bs = std::fs::read(channel_backup_path)?;
+                // backup all except graph db
+                // also delete graph db always
+                // happen in backup action not in entrypoint
                 std::fs::remove_dir_all("/root/.lnd/data/graph")?;
                 let encoded = base64::encode(bs);
                 Ok::<Option<Value>, std::io::Error>(Some(serde_json::json!({
@@ -480,11 +490,12 @@ fn main() -> Result<(), anyhow::Error> {
             let stat;
             loop {
                 let cmd = process::Command::new("curl")
+                    .arg("--no-progress-meter")
                     .arg("-X")
                     .arg("POST")
                     .arg("--cacert")
                     .arg("/root/.lnd/tls.cert")
-                    .arg("https://localhost:8080/v1/unlockwallet")
+                    .arg("https://127.0.0.1:8080/v1/unlockwallet")
                     .arg("-d")
                     .arg(serde_json::to_string(&SkipNulls(serde_json::json!({
                         "wallet_password": base64::encode(&password_bytes),
@@ -536,6 +547,7 @@ fn main() -> Result<(), anyhow::Error> {
                 println!("{}", e);
                 return Err(anyhow::anyhow!("Error unlocking wallet. Exiting."));
             }
+            // wallet unlocking has to happen while LND running (encrypted on disk) creds are stored in separate place on disk (pwd.dat in our case - in data volume)
             Ok(_) => match use_channel_backup_data {
                 None => (),
                 Some(backups) => {
@@ -547,13 +559,14 @@ fn main() -> Result<(), anyhow::Error> {
                     ))?;
                     let mac_encoded = hex::encode_upper(mac);
                     let status = std::process::Command::new("curl")
+                        .arg("--no-progress-meter")
                         .arg("-X")
                         .arg("POST")
                         .arg("--cacert")
                         .arg("/root/.lnd/tls.cert")
                         .arg("--header")
                         .arg(format!("Grpc-Metadata-macaroon: {}", mac_encoded))
-                        .arg("https://localhost:8080/v1/channels/backup/restore")
+                        .arg("https://127.0.0.1:8080/v1/channels/backup/restore")
                         .arg("-d")
                         .arg(serde_json::to_string(&backups)?)
                         .status()?;
@@ -566,15 +579,17 @@ fn main() -> Result<(), anyhow::Error> {
             },
         }
     } else {
+        println!("creating password data");
         let mut password_bytes = [0; 16];
         let mut dev_random = File::open("/dev/random")?;
         dev_random.read_exact(&mut password_bytes)?;
         let output = std::process::Command::new("curl")
+            .arg("--no-progress-meter")
             .arg("-X")
             .arg("POST")
             .arg("--cacert")
             .arg("/root/.lnd/tls.cert")
-            .arg("https://localhost:8080/v1/genseed")
+            .arg("https://127.0.0.1:8080/v1/genseed")
             .arg("-d")
             .arg(format!("{}", serde_json::json!({})))
             .output()?;
@@ -583,11 +598,12 @@ fn main() -> Result<(), anyhow::Error> {
             cipher_seed_mnemonic,
         } = serde_json::from_slice(&output.stdout)?;
         let status = std::process::Command::new("curl")
+            .arg("--no-progress-meter")
             .arg("-X")
             .arg("POST")
             .arg("--cacert")
             .arg("/root/.lnd/tls.cert")
-            .arg("https://localhost:8080/v1/initwallet")
+            .arg("https://127.0.0.1:8080/v1/initwallet")
             .arg("-d")
             .arg(format!(
                 "{}",
@@ -619,11 +635,12 @@ fn main() -> Result<(), anyhow::Error> {
         || {
             serde_json::from_slice(
                 &std::process::Command::new("curl")
+                    .arg("--no-progress-meter")
                     .arg("--cacert")
                     .arg("/root/.lnd/tls.cert")
                     .arg("--header")
                     .arg(format!("Grpc-Metadata-macaroon: {}", mac_encoded))
-                    .arg("https://localhost:8080/v1/getinfo")
+                    .arg("https://127.0.0.1:8080/v1/getinfo")
                     .output()?
                     .stdout,
             )
@@ -635,8 +652,8 @@ fn main() -> Result<(), anyhow::Error> {
     let lnd_connect_grpc = Property {
         value_type: "string",
         value: format!(
-            "lndconnect://{tor_address}:10009?cert={cert}&macaroon={macaroon}",
-            tor_address = tor_address,
+            "lndconnect://{control_tor_address}:10009?cert={cert}&macaroon={macaroon}",
+            control_tor_address = control_tor_address,
             cert = base64::encode_config(
                 base64::decode(
                     tls_cert
@@ -653,7 +670,9 @@ fn main() -> Result<(), anyhow::Error> {
                 base64::Config::new(base64::CharacterSet::UrlSafe, false)
             ),
         ),
-        description: None,
+        description: Some(
+            "Use this for other applications that require a gRPC connection".to_owned(),
+        ),
         copyable: true,
         qr: true,
         masked: true,
@@ -661,8 +680,8 @@ fn main() -> Result<(), anyhow::Error> {
     let lnd_connect_rest = Property {
         value_type: "string",
         value: format!(
-            "lndconnect://{tor_address}:8080?cert={cert}&macaroon={macaroon}",
-            tor_address = tor_address,
+            "lndconnect://{control_tor_address}:8080?cert={cert}&macaroon={macaroon}",
+            control_tor_address = control_tor_address,
             cert = base64::encode_config(
                 base64::decode(
                     tls_cert
@@ -679,7 +698,9 @@ fn main() -> Result<(), anyhow::Error> {
                 base64::Config::new(base64::CharacterSet::UrlSafe, false)
             ),
         ),
-        description: None,
+        description: Some(
+            "Use this for other applications that require a REST connection".to_owned(),
+        ),
         copyable: true,
         qr: true,
         masked: true,
@@ -687,9 +708,9 @@ fn main() -> Result<(), anyhow::Error> {
     let node_uri = Property {
         value_type: "string",
         value: format!(
-            "{pubkey}@{tor_address}:9735",
+            "{pubkey}@{peer_tor_address}:9735",
             pubkey = node_info.identity_pubkey,
-            tor_address = tor_address
+            peer_tor_address = peer_tor_address
         ),
         description: Some(
             "Give this to others to allow them to add your LND node as a peer".to_owned(),
@@ -759,11 +780,12 @@ fn main() -> Result<(), anyhow::Error> {
         std::thread::sleep(Duration::from_secs(10));
         node_info = serde_json::from_slice(
             &std::process::Command::new("curl")
+                .arg("--no-progress-meter")
                 .arg("--cacert")
                 .arg("/root/.lnd/tls.cert")
                 .arg("--header")
                 .arg(format!("Grpc-Metadata-macaroon: {}", mac_encoded))
-                .arg("https://localhost:8080/v1/getinfo")
+                .arg("https://127.0.0.1:8080/v1/getinfo")
                 .output()?
                 .stdout,
         )

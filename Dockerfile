@@ -12,8 +12,7 @@ RUN make -j24 install tags="autopilotrpc signrpc walletrpc chainrpc invoicesrpc 
 FROM alpine:3.12 as runner
 
 RUN apk update
-RUN apk add tini
-RUN apk add curl
+RUN apk add tini curl
 
 COPY --from=builder /go/bin /usr/local/bin
 ADD ./configurator/target/aarch64-unknown-linux-musl/release/configurator /usr/local/bin/configurator

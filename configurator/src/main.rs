@@ -869,7 +869,7 @@ struct JsonRpc1Res {
     error: Option<BitcoindError>,
     id: serde_json::Value,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct BitcoindError {
     code: i32,
     message: String,
@@ -881,7 +881,7 @@ struct BitcoindRpcInfo<'a> {
     pass: &'a str,
 }
 fn bitcoin_rpc_is_ready(rpc_info: &BitcoindRpcInfo) -> bool {
-    let body = json!({"jsonrpc": "1.0", "id": null, "method": "getblockcount", "params": []});
+    let body = json!({"jsonrpc": "1.0", "id": null, "method": "getblockchaininfo", "params": []});
     let client = reqwest::blocking::Client::new();
     let res = client
         .post(format!("http://{}:{}/", rpc_info.host, rpc_info.port))
@@ -889,7 +889,8 @@ fn bitcoin_rpc_is_ready(rpc_info: &BitcoindRpcInfo) -> bool {
         .json(&body)
         .send();
     match res {
-        Err(_) => {
+        Err(e) => {
+            println!("{:?}", e);
             return false;
         }
         Ok(o) => {
@@ -901,8 +902,18 @@ fn bitcoin_rpc_is_ready(rpc_info: &BitcoindRpcInfo) -> bool {
                         result: _,
                         error,
                         id: _,
-                    }) => error.is_none(),
-                    Err(_) => false,
+                    }) => {
+                        if let Some(e) = error {
+                            println!("{}", e.message);
+                            false
+                        } else {
+                            true
+                        }
+                    }
+                    Err(e) => {
+                        println!("{:?}", e);
+                        false
+                    }
                 }
             }
         }

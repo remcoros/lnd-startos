@@ -89,6 +89,12 @@
     - PUSH:
         to: 'users.[first(item => ''item.name = "lnd")].allowed-calls'
         value: "getpeerinfo"
+- rule: '''users.[first(item => ''item.name = "lnd")].allowed-calls.* = "getmempoolinfo"'
+  description: 'RPC user "lnd" must have "getmempoolinfo" enabled'
+  suggestions:
+    - PUSH:
+        to: 'users.[first(item => ''item.name = "lnd")].allowed-calls'
+        value: "getmempoolinfo"
 - rule: 'users.[first(item => ''item.name = "lnd")].fetch-blocks?'
   description: 'RPC user "lnd" must have "Fetch Blocks" enabled'
   suggestions:

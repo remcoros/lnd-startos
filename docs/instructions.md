@@ -38,13 +38,11 @@ It is not recommended to open a channel less than 100,000 satoshi, or .001 BTC. 
 
 If you want to receive payments, you will need some inbound liquidity.
 
-The first, easiest, and best way to get inbound liquidity is to use your outbound liquidity to buy something. Any Bitcoin you spend using your outbound liquidity is Bitcoin you can now receive back. So if there is something you want to buy, like a Start9 Embassy or a t-shirt from the Start9 store, simply make the purchase, and you will then have inbound liquidity equal to the amount of Satoshis you spend.
-
-Option 2 is to personally ask Start9 for an invoice for however much inbound liquidity you want. Then you send Bitcoin to the invoice, and in turn we will transfer fiat currency to you equal to the amount of the Bitcoin you send us. In other words, Start9 will buy some Bitcoin from you at market rate, such that you then have inbound liquidity. In either case, you are spending or selling some Bitcoin.
+The first, easiest, and best way to get inbound liquidity is to use your outbound liquidity to buy something. Any Bitcoin you spend using your outbound liquidity is Bitcoin you can now receive back. So if there is something you want to buy, like a Start9 Embassy or a t-shirt from the Start9 store, simply make the purchase, and you will then have inbound liquidity equal to the amount of Satoshis you spend.  You may also sell some Bitcoin to a friend that already has established Lightning channels.
 
 The only way to get inbound liquidity without spending or selling Bitcoin is to convince someone to open a channel with you, just as you opened a channel with Start9 HQ. This may be a difficult task, since there is not much incentive for someone to open a channel with you unless you are also very well connected. Also, you will need to make sure that they too, are well connected with plenty of inbound liquidity, or else your inbound liquidity with them will not really matter. In other words, they might be the only person capable of paying you.
 
-So options 1 or 2 are best. Use your Lightning node's outbound liquidity to either purchase something or sell some Bitcoin. Now, you can pay and get paid using Lightning in an amount equal to your outbound and inbound liquidity.
+Use your Lightning node's outbound liquidity to either purchase something or sell some Bitcoin. Now, you can pay and get paid using Lightning in an amount equal to your outbound and inbound liquidity.
 
 ## Sending payments over Lightning
 

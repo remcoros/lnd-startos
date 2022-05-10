@@ -1,6 +1,6 @@
 id: lnd
 title: Lightning Network Daemon
-version: 0.14.2
+version: 0.14.2.1
 release-notes: "https://github.com/lightningnetwork/lnd/blob/v0.14.2-beta/docs/release-notes/release-notes-0.14.2.md"
 license: mit
 wrapper-repo: "https://github.com/Start9Labs/lnd-wrapper"

@@ -226,13 +226,6 @@ pub struct CipherSeedMnemonic {
     cipher_seed_mnemonic: Vec<String>,
 }
 
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct RestoreInfo {
-    _app_version: emver::Version,
-    _os_version: emver::Version,
-}
-
 #[derive(serde::Deserialize, Debug)]
 pub struct LndGetInfoRes {
     identity_pubkey: String,
@@ -260,13 +253,9 @@ fn get_alias(config: &Config) -> Result<String, anyhow::Error> {
     })
 }
 
-fn restore_info(base_path: &Path) -> Result<Option<RestoreInfo>, anyhow::Error> {
+fn is_restore(base_path: &Path) -> bool {
     let path = base_path.join("start9/restore.yaml");
-    if path.exists() {
-        Ok(serde_yaml::from_reader(File::open(path)?)?)
-    } else {
-        Ok(None)
-    }
+    path.exists()
 }
 
 fn reset_restore(base_path: &Path) -> Result<(), anyhow::Error> {
@@ -516,29 +505,25 @@ fn main() -> Result<(), anyhow::Error> {
     }
     std::fs::hard_link(cert_path, &cert_link)?;
 
-    let use_channel_backup_data = match restore_info(Path::new("/root/.lnd"))? {
-        None => Ok(None::<serde_json::Value>),
-        Some(_) => {
-            println!(
-                "Detected Embassy Restore. Conducting precautionary channel backup restoration."
-            );
-            let channel_backup_path =
-                Path::new("/root/.lnd/data/chain/bitcoin/mainnet/channel.backup");
-            if channel_backup_path.exists() {
-                let bs = std::fs::read(channel_backup_path)?;
-                // backup all except graph db
-                // also delete graph db always
-                // happen in backup action not in entrypoint
-                std::fs::remove_dir_all("/root/.lnd/data/graph")?;
-                let encoded = base64::encode(bs);
-                Ok::<Option<Value>, std::io::Error>(Some(serde_json::json!({
-                    "multi_chan_backup": encoded
-                })))
-            } else {
-                println!("No channel restoration required. No channel backup exists.");
-                Ok(None)
-            }
+    let use_channel_backup_data = if is_restore(Path::new("/root/.lnd")) {
+        println!("Detected Embassy Restore. Conducting precautionary channel backup restoration.");
+        let channel_backup_path = Path::new("/root/.lnd/data/chain/bitcoin/mainnet/channel.backup");
+        if channel_backup_path.exists() {
+            let bs = std::fs::read(channel_backup_path)?;
+            // backup all except graph db
+            // also delete graph db always
+            // happen in backup action not in entrypoint
+            std::fs::remove_dir_all("/root/.lnd/data/graph")?;
+            let encoded = base64::encode(bs);
+            Ok::<Option<Value>, std::io::Error>(Some(serde_json::json!({
+                "multi_chan_backup": encoded
+            })))
+        } else {
+            println!("No channel restoration required. No channel backup exists.");
+            Ok(None)
         }
+    } else {
+        Ok(None)
     }?;
 
     if Path::new("/root/.lnd/pwd.dat").exists() {
@@ -621,22 +606,66 @@ fn main() -> Result<(), anyhow::Error> {
                         "/root/.lnd/data/chain/bitcoin/mainnet/admin.macaroon",
                     ))?;
                     let mac_encoded = hex::encode_upper(mac);
-                    let status = std::process::Command::new("curl")
-                        .arg("--no-progress-meter")
-                        .arg("-X")
-                        .arg("POST")
-                        .arg("--cacert")
-                        .arg("/root/.lnd/tls.cert")
-                        .arg("--header")
-                        .arg(format!("Grpc-Metadata-macaroon: {}", mac_encoded))
-                        .arg("https://127.0.0.1:8080/v1/channels/backup/restore")
-                        .arg("-d")
-                        .arg(serde_json::to_string(&backups)?)
-                        .status()?;
-                    if !status.success() {
-                        return Err(anyhow::anyhow!("Error restoring wallet. Exiting."));
-                    } else {
-                        reset_restore(Path::new("/root/.lnd"))?;
+                    let stat;
+                    loop {
+                        std::thread::sleep(Duration::from_secs(5));
+                        let output = std::process::Command::new("curl")
+                            .arg("--no-progress-meter")
+                            .arg("-X")
+                            .arg("POST")
+                            .arg("--cacert")
+                            .arg("/root/.lnd/tls.cert")
+                            .arg("--header")
+                            .arg(format!("Grpc-Metadata-macaroon: {}", mac_encoded))
+                            .arg("https://127.0.0.1:8080/v1/channels/backup/restore")
+                            .arg("-d")
+                            .arg(serde_json::to_string(&backups)?)
+                            .output()?;
+                        let output = String::from_utf8(output.stdout)?.parse::<Value>()?;
+                        println!("{}", output);
+                        match output.as_object() {
+                            None => {
+                                stat = Err(anyhow::anyhow!(
+                                    "Invalid output from backup restoration attempt: {:?}",
+                                    output
+                                ));
+                                break;
+                            }
+                            Some(o) => match o.get("message") {
+                                None => {
+                                    stat = Ok(output);
+                                    break;
+                                }
+                                Some(v) => match v.as_str() {
+                                    None => {
+                                        stat = Err(anyhow::anyhow!(
+                                            "Invalid error output from backup restoration attempt: {:?}",
+                                            v
+                                        ));
+                                        break;
+                                    }
+                                    Some(s) => {
+                                        if s.contains("server is still in the process of starting")
+                                        {
+                                            continue;
+                                        } else {
+                                            stat = Err(anyhow::anyhow!("{}", s));
+                                            break;
+                                        }
+                                    }
+                                },
+                            },
+                        }
+                    }
+                    match stat {
+                        Err(e) => {
+                            eprintln!("Error restoring wallet. Exiting.");
+                            return Err(e);
+                        }
+                        Ok(_) => {
+                            println!("Successfully restored wallet.");
+                            reset_restore(Path::new("/root/.lnd"))?;
+                        }
                     }
                 }
             },

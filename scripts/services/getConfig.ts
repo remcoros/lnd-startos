@@ -106,16 +106,16 @@ export const getConfig: T.ExpectedExports.getConfig = compat.getConfig({
   "bitcoind": {
     "type": "union",
     "name": "Bitcoin Core",
-    "description": "The Bitcoin Core node to connect to:\n  - none: Use the light bitcoin backend built into LND, Neutrino.\n  - internal: The Bitcoin Core and Proxy services installed to your Embassy\n",
+    "description": "<p>The Bitcoin Core node to connect to:</p><ul><li><strong>None</strong>: Use the light bitcoin backend built into LND, Neutrino. If using Neutrino, please switch to using Bitcoin Core as soon as possible. Neutrino uses the BIP157/8 light client protocol, which has security risks.</li><br><li><strong>Bitcoin Core/Proxy</strong>: either service installed on your Embassy. Neutrino will also be used during IBD.</li></ul>",
     "tag": {
       "id": "type",
       "name": "Type",
       "variant-names": {
         "none": "None (Built-in LND Neutrino)",
-        "internal": "Internal (Bitcoin Core)",
-        "internal-proxy": "Internal (Bitcoin Proxy)"
+        "internal": "Bitcoin Core",
+        "internal-proxy": "Bitcoin Proxy"
       },
-      "description": "The Bitcoin Core node to connect to:\n  - none: Use the light bitcoin backend built into LND, Neutrino. If using Neutrino, please switch to using Bitcoin Core as soon as possible. Neutrino uses the BIP157/8 light client protocol, which has security risks.\n  - internal: The Bitcoin Core and Proxy services installed to your Embassy. Neutrino will also be used during IBD.\n"
+      "description": "<p>The Bitcoin Core node to connect to:</p><ul><li><strong>None</strong>: Use the light bitcoin backend built into LND, Neutrino. If using Neutrino, please switch to using Bitcoin Core as soon as possible. Neutrino uses the BIP157/8 light client protocol, which has security risks.</li><br><li><strong>Bitcoin Core/Proxy</strong>: either service installed on your Embassy. Neutrino will also be used during IBD.</li></ul>"
     },
     "warning": "If using Neutrino, please switch to using Bitcoin Core as soon as possible. Neutrino uses the BIP157/8 light client protocol, which has security risks.",
     "default": "internal-proxy",

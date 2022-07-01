@@ -44,7 +44,16 @@ config: # if you dont provide an io format in cases like config where its necess
   set:
     type: script
 properties:
-  type: script
+  type: docker
+  image: main
+  system: false
+  entrypoint: configurator
+  args:
+    - properties
+  mounts:
+    main: /root/.lnd
+  io-format: yaml
+  inject: false
 volumes:
   # this is the image where data will go from 0.2.x
   main:

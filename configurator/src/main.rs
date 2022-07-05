@@ -289,6 +289,8 @@ fn main() -> Result<(), anyhow::Error> {
         pass: &bitcoind_rpc_pass,
     };
 
+    let mut bitcoin_synced = false;
+
     if bitcoind_selected {
         loop {
             if bitcoin_rpc_is_ready(rpc_info)? {
@@ -297,10 +299,10 @@ fn main() -> Result<(), anyhow::Error> {
             println!("Waiting for bitcoin RPC...");
             std::thread::sleep(std::time::Duration::from_secs(1));
         }
+        bitcoin_synced = bitcoin_is_synced(rpc_info)?;
+        println!("bitcoin_synced = {}", bitcoin_synced);
     }
 
-    let bitcoin_synced = bitcoin_is_synced(rpc_info)?;
-    println!("bitcoin_synced = {}", bitcoin_synced);
     let use_neutrino = !(bitcoind_selected && bitcoin_synced);
     println!("use_neutrino = {}", use_neutrino);
 

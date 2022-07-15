@@ -1,11 +1,7 @@
 id: lnd
 title: Lightning Network Daemon
-version: 0.14.2.2
-release-notes: |
-  * Neutrino mode
-  * Auto-switch to neutrino when bitcoind is still syncing
-  * New action: Import from Umbrel 0.4
-  * Switch to using new eOS APIs for faster configuration and properties
+version: 0.14.2.3
+release-notes: Fixed all migrations to previous versions and from prior versions 
 license: mit
 wrapper-repo: "https://github.com/Start9Labs/lnd-wrapper"
 upstream-repo: "https://github.com/lightningnetwork/lnd"
@@ -170,13 +166,7 @@ backup:
 migrations:
   from:
     "<=0.14.2.1":
-      type: docker
-      image: main
-      system: false
-      entrypoint: "/bin/echo"
-      args: ['{"configured": true}']
-      io-format: json
-      inject: false
+      type: script
   to:
     ">=0.14.2.2":
       type: docker
@@ -186,6 +176,8 @@ migrations:
       args: ['{"configured": true}']
       io-format: json
       inject: false
+    "<=0.14.2.1":
+      type: script
 actions:
   import-umbrel:
     name: "Import from Umbrel (0.4)"

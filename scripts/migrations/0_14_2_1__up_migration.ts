@@ -1,4 +1,4 @@
-import { types as T, YAML, matches } from "../deps.ts"
+import { types as T, YAML, matches, rangeOf } from "../deps.ts"
 
 const { shape, string, boolean } = matches
 
@@ -41,7 +41,7 @@ export const migration_up_0_14_2_1: T.ExpectedExports.migration = async (effects
   }
 
   // if bitcoin is configured to internal (ie. pointer to proxy), upgrade should ensure it remains proxy. As of 0.14.2, internal means bitcoin core. 
-  if (version <= '0.13.3.2') {
+  if (rangeOf('<=0.13.3.2').check(version)) {
     if (parsed.bitcoind.type === 'internal') {
       parsed.bitcoind.type = 'internal-proxy'
     }
@@ -59,7 +59,7 @@ export const migration_up_0_14_2_1: T.ExpectedExports.migration = async (effects
   })
 
   // tor was added in 0.14.2
-  if (version < '0.14.2') {
+  if (rangeOf('<0.14.2').check(version)) {
     if (!matchTor.test(parsed)) {
       return { result: { configured: false } }
     }

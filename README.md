@@ -8,7 +8,7 @@ This project wraps [LND](https://github.com/lightningnetwork/lnd
 - [docker](https://docs.docker.com/get-docker)
 - [docker-buildx](https://docs.docker.com/buildx/working-with-buildx/)
 - [yq (version 4)](https://mikefarah.gitbook.io/yq)
-- [appmgr](https://github.com/Start9Labs/embassy-os/tree/master/appmgr)
+- [embassy-sdk](https://github.com/Start9Labs/embassy-os/blob/master/backend/install-sdk.sh)
 - [make](https://www.gnu.org/software/make/)
 - [deno](https://deno.land/)
 
@@ -33,10 +33,11 @@ make
 
 ## Installing (on Embassy)
 
-SSH into an Embassy device.
-`scp` the `.s9pk` to any directory from your local machine.
-Run the following command to determine successful install:
-
 ```
-appmgr install lnd.s9pk
+# Copy S9PK to the external disk. Make sure to create the directory if it doesn't already exist
+scp lnd.s9pk start9@embassy-<id>.local:/embassy-data/package-data/tmp 
+ssh start9@embassy-<id>.local
+embassy-cli auth login (enter password)
+# Install the sideloaded package
+embassy-cli package install /embassy-data/pacakge-data/tmp/lnd.s9pk
 ```

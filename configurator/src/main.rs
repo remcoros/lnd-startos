@@ -1,6 +1,7 @@
 use bitcoincore_rpc::RpcApi;
 use rand::Rng;
 use serde_json::Value;
+use std::str::FromStr;
 use std::env;
 use std::fs::File;
 use std::net::SocketAddr;
@@ -53,6 +54,7 @@ struct Config {
     max_chan_size: Option<u64>,
     bitcoind: BitcoinCoreConfig,
     autopilot: AutoPilotConfig,
+    watchtowers: WatchtowerConfig,
     advanced: AdvancedConfig,
     tor: TorConfig,
 }
@@ -62,6 +64,21 @@ struct Config {
 struct TorConfig {
     use_tor_only: bool,
     stream_isolation: bool,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(tag = "type")]
+#[serde(rename_all = "kebab-case")]
+struct WatchtowerConfig {
+    wt_server: bool,
+    wt_client: bool,
+    add_watchtowers: Vec<WatchtowerAddConfig>,
+}
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(tag = "type")]
+#[serde(rename_all = "kebab-case")]
+struct WatchtowerAddConfig {
+    wt_uri: String,
 }
 
 #[derive(serde::Deserialize)]
@@ -123,6 +140,7 @@ struct AdvancedConfig {
     protocol_no_anchors: bool,
     protocol_disable_script_enforced_lease: bool,
     gc_canceled_invoices_on_startup: bool,
+    allow_circular_route: bool,
     bitcoin: BitcoinChannelConfig,
 }
 
@@ -223,6 +241,30 @@ pub fn local_port_available(port: u16) -> Result<bool, anyhow::Error> {
     }
 }
 
+struct WatchtowerUri {
+    pubkey: String,
+    address: String,
+}
+impl FromStr for WatchtowerUri {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut split_input = s.split("@");
+        let pubkey = match split_input.next() {
+            Some(x) => x.to_string(),
+            None => anyhow::bail!("Couldn't parse the pubkey from watchtower URI"),
+        };
+        let address = match split_input.next() {
+            Some(x) => x.to_string(),
+            None => anyhow::bail!("Couldn't parse the address from watchtower URI"),
+        };
+        Ok(WatchtowerUri{
+            pubkey , address
+        })
+
+    }
+}
+
 fn main() -> Result<(), anyhow::Error> {
     while !Path::new("/root/.lnd/start9/config.yaml").exists() {
         std::thread::sleep(std::time::Duration::from_secs(1));
@@ -232,6 +274,7 @@ fn main() -> Result<(), anyhow::Error> {
     let control_tor_address = config.control_tor_address;
     let watchtower_tor_address = config.watchtower_tor_address;
     let peer_tor_address = config.peer_tor_address;
+    
     if let Some(cmd) = env::args().skip(1).next() {
         if cmd == "properties" {
             properties(control_tor_address, peer_tor_address, alias);
@@ -329,6 +372,7 @@ fn main() -> Result<(), anyhow::Error> {
         accept_keysend = config.accept_keysend,
         accept_amp = config.accept_amp,
         gc_canceled_invoices_on_startup = config.advanced.gc_canceled_invoices_on_startup,
+        allow_circular_route = config.advanced.allow_circular_route,
         alias = alias,
         color = config.color,
         feeurl_row = if use_neutrino {
@@ -367,7 +411,9 @@ fn main() -> Result<(), anyhow::Error> {
         db_bolt_auto_compact_min_age = config.advanced.db_bolt_auto_compact_min_age,
         db_bolt_db_timeout = config.advanced.db_bolt_db_timeout,
         tor_enable_clearnet = !config.tor.use_tor_only,
-        tor_stream_isolation = config.tor.stream_isolation
+        tor_stream_isolation = config.tor.stream_isolation,
+        wt_server = config.watchtowers.wt_server,
+        wt_client = config.watchtowers.wt_client
     )?;
 
     // TLS Certificate migration from 0.11.0 -> 0.11.1 release (to include tor address)
@@ -609,7 +655,7 @@ fn main() -> Result<(), anyhow::Error> {
         let output = std::process::Command::new("curl")
             .arg("--no-progress-meter")
             .arg("-X")
-            .arg("POST")
+            .arg("GET")
             .arg("--cacert")
             .arg("/root/.lnd/tls.cert")
             .arg("https://127.0.0.1:8080/v1/genseed")
@@ -658,6 +704,87 @@ fn main() -> Result<(), anyhow::Error> {
             )?;
         }
     }
+ 
+    if true { 
+        let mac = std::fs::read(Path::new(
+            "/root/.lnd/data/chain/bitcoin/mainnet/admin.macaroon",
+        ))?;
+        let mac_encoded = hex::encode_upper(mac);
+
+        for watchtower in config.watchtowers.add_watchtowers.iter() {
+            let mut watchtower_uri = String::new();
+            watchtower_uri.push_str(&format!("{}", watchtower.wt_uri));
+            let parsed_watchtower_uri: WatchtowerUri = watchtower_uri.parse()?;
+            let _status = {
+                use std::process;
+                let mut res;
+                let stat;
+                loop {
+                    println!("Configuring Watchtower for {}... ", alias);
+                    println!("pubkey: {} || host: {}", &parsed_watchtower_uri.pubkey, &parsed_watchtower_uri.address);
+                    let bytes: Vec<u8> = hex::decode(&parsed_watchtower_uri.pubkey)?;
+                    let hex_encoded: String = base64::encode_config(&bytes, base64::URL_SAFE_NO_PAD);
+                    std::thread::sleep(Duration::from_secs(5));
+                    let cmd = process::Command::new("curl")
+                        .arg("--no-progress-meter")
+                        .arg("-X")
+                        .arg("POST")
+                        .arg("--cacert")
+                        .arg("/root/.lnd/tls.cert")
+                        .arg("--header")
+                        .arg(format!("Grpc-Metadata-macaroon: {}", mac_encoded))
+                        .arg("https://lnd.embassy:8080/v2/watchtower/client")
+                        .arg("-d")
+                        .arg(format!(
+                            "{}",
+                            serde_json::json!({
+                                "pubkey": hex_encoded,
+                                "address": &parsed_watchtower_uri.address,
+                            })
+                        ))
+                        .stdin(process::Stdio::piped())
+                        .stdout(process::Stdio::piped())
+                        .stderr(process::Stdio::piped())
+                        .spawn()?;
+                    res = cmd.wait_with_output()?;
+                    let output = String::from_utf8(res.stdout)?.parse::<Value>()?;
+                    match output.as_object() {
+                        None => {
+                            stat = Err(anyhow::anyhow!(
+                                "Invalid Watchtower Configuration: {:?}",
+                                output
+                            ));
+                            break;
+                        }
+                        Some(o) => match o.get("message") {
+                            None => {
+                                stat = Ok(output);
+                                break;
+                            }
+                            Some(v) => match v.as_str() {
+                                None => {
+                                    stat = Err(anyhow::anyhow!(
+                                        "Invalid Watchtower Configuration: {:?}",
+                                        v
+                                    ));
+                                    break;
+                                }
+                                Some(s) => {
+                                    if s.contains("waiting to start") {
+                                        continue;
+                                    } else {
+                                        stat = Err(anyhow::anyhow!("{}", s));
+                                        break;
+                                    }
+                                }
+                            },
+                        },
+                    }
+                }
+                stat
+            };
+        }
+    };
 
     if bitcoind_selected {
         loop {

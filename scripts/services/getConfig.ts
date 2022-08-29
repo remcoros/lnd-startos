@@ -253,6 +253,50 @@ export const getConfig: T.ExpectedExports.getConfig = compat.getConfig({
       }
     }
   },
+  "watchtowers": {
+    "type": "object",
+    "name": "Watchtowers",
+    "description": "Watchtower Settings",
+    "spec": {
+      "wt-server": {
+        "type": "boolean",
+        "name": "Enable Watchtower Server",
+        "description":
+          "Allow other nodes to find your watchtower server on the network.",
+        "default": false,
+      },
+      "wt-client": {
+        "type": "boolean",
+        "name": "Enable Watchtower Client",
+        "description": "Allow your node to find other watchtower servers on the network.",
+        "default": false,
+      },
+      "add-watchtowers": {
+        "type": "list",
+        "name": "Add Watchtowers",
+        "description": "Add URIs of Watchtowers to connect to.",
+        "range": "[0,*)",
+        "subtype": "object",
+        "spec": {
+          "unique-by": "wt-uri",
+          "display-as": "{{wt-uri}}",
+          "spec": {
+            "wt-uri": {
+              "type": "string",
+              "name": "Watchtower URI",
+              "description": "The URI for the watchtower",
+              "nullable": true,
+              "copyable": true,
+              "placeholder": "pubkey@host",
+            },
+          }
+        },
+        "default": [
+
+        ]
+      }
+    }
+  },
   "advanced": {
     "type": "object",
     "name": "Advanced",
@@ -374,6 +418,12 @@ export const getConfig: T.ExpectedExports.getConfig = compat.getConfig({
         "type": "boolean",
         "name": "Cleanup Canceled Invoices on Startup",
         "description": "If true, LND will attempt to garbage collect canceled invoices upon start.\n",
+        "default": false
+      },
+      "allow-circular-route": {
+        "type": "boolean",
+        "name": "Allow Circular Route",
+        "description": "If true, LND will allow htlc forwards that arrive and depart on the same channel.\n",
         "default": false
       },
       "bitcoin": {

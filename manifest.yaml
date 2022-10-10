@@ -1,10 +1,8 @@
 id: lnd
 title: Lightning Network Daemon
-version: 0.15.0
+version: 0.15.2
 release-notes: |-
-  * New LND v0.15.0-beta: [Upstream Release Notes](https://github.com/lightningnetwork/lnd/blob/master/docs/release-notes/release-notes-0.15.0.md)  
-  * Add "Allow Circular Route" Config Option
-  * Enable Watchtowers 
+  * New LND v0.15.2-beta: [Upstream Release Notes](https://github.com/lightningnetwork/lnd/blob/master/docs/release-notes/release-notes-0.15.2.md)  
 license: mit
 wrapper-repo: "https://github.com/Start9Labs/lnd-wrapper"
 upstream-repo: "https://github.com/lightningnetwork/lnd"
@@ -108,7 +106,7 @@ interfaces:
       - http
 dependencies:
   btc-rpc-proxy:
-    version: ">=0.3.2.1 <0.4.0"
+    version: ">=0.3.2.5 <0.4.0"
     requirement:
       type: "opt-out"
       how: Can alternatively use the internal full archival bitcoind node or configure an external bitcoin node.

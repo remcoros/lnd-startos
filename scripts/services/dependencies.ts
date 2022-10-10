@@ -1,4 +1,4 @@
-import { types as T, matches } from "../deps.ts";
+import { matches, types as T } from "../deps.ts";
 
 const { shape, arrayOf, string, boolean } = matches;
 
@@ -11,8 +11,8 @@ const matchProxyConfig = shape({
         password: string,
         "fetch-blocks": boolean,
       },
-      ["fetch-blocks"]
-    )
+      ["fetch-blocks"],
+    ),
   ),
 });
 
@@ -29,7 +29,8 @@ function randomItemString(input: string) {
 }
 
 const serviceName = "lnd";
-const fullChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+const fullChars =
+  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 type Check = {
   currentError(config: T.Config): string | void;
   fix(config: T.Config): void;
@@ -48,7 +49,7 @@ const checks: Array<Check> = [
     },
     fix(config) {
       if (!matchProxyConfig.test(config)) {
-        return
+        return;
       }
       config.users.push({
         name: serviceName,
@@ -73,13 +74,17 @@ const checks: Array<Check> = [
     "getpeerinfo",
     "getmempoolinfo",
     "getzmqnotifications",
+    "getdeploymentinfo",
   ].map(
     (operator): Check => ({
       currentError(config) {
         if (!matchProxyConfig.test(config)) {
           return "Config is not the correct shape";
         }
-        if (config.users.find((x) => x.name === serviceName)?.["allowed-calls"]?.some((x) => x === operator) ?? false) {
+        if (
+          config.users.find((x) => x.name === serviceName)?.["allowed-calls"]
+            ?.some((x) => x === operator) ?? false
+        ) {
           return;
         }
         return `RPC user "${serviceName}" must have "${operator}" enabled`;
@@ -94,14 +99,17 @@ const checks: Array<Check> = [
         }
         found["allowed-calls"] = [...(found["allowed-calls"] ?? []), operator];
       },
-    })
+    }),
   ),
   {
     currentError(config) {
       if (!matchProxyConfig.test(config)) {
         return "Config is not the correct shape";
       }
-      if (config.users.find((x) => x.name === serviceName)?.["fetch-blocks"] ?? false) {
+      if (
+        config.users.find((x) => x.name === serviceName)?.["fetch-blocks"] ??
+          false
+      ) {
         return;
       }
       return `RPC user "${serviceName}" must have "Fetch Blocks" enabled`;
@@ -120,7 +128,7 @@ const checks: Array<Check> = [
 ];
 
 const matchBitcoindConfig = shape({
-  "zmq-enabled": boolean
+  "zmq-enabled": boolean,
 });
 
 export const dependencies: T.ExpectedExports.dependencies = {
@@ -153,15 +161,15 @@ export const dependencies: T.ExpectedExports.dependencies = {
     // deno-lint-ignore require-await
     async check(_effects, configInput) {
       const config = matchBitcoindConfig.unsafeCast(configInput);
-      if (!config['zmq-enabled']) {
-        return { error: 'Must have ZeroMQ enabled' };
+      if (!config["zmq-enabled"]) {
+        return { error: "Must have ZeroMQ enabled" };
       }
       return { result: null };
     },
     // deno-lint-ignore require-await
     async autoConfigure(_effects, configInput) {
       const config = matchBitcoindConfig.unsafeCast(configInput);
-      config['zmq-enabled'] = true;
+      config["zmq-enabled"] = true;
       return { result: config };
     },
   },

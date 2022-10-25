@@ -69,7 +69,7 @@ To obtain your full LND Watchtower URI:
 
 You can enlist watchtowers to watch your node by using `Add a watchtower to your LND Node` in Actions or in Config options. This will back up your LND node state to the remote watchtower you entered.
 
-After adding a watchtower URI through Actions or Config, you can conform it is working by:
+After adding a watchtower URI through Actions or Config, you can confirm it is working by:
 1. SSH into your Embassy
 1. Run `sudo docker exec -ti lnd.embassy lncli wtclient towers`
 1. If you see `"active_session_candidate": true`, it worked. If not, double check the watchtower URI you were provided and try again.

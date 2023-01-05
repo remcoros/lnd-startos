@@ -1,9 +1,8 @@
 id: lnd
 title: Lightning Network Daemon
-version: 0.15.4.1
+version: 0.15.4.2
 release-notes: |-
-  * Build for x86
-  * Adjust bitcoind dependency version requirement to accommodate bitcoind v24 and v25
+  * Add new action for resetting wallet transactions
 license: mit
 wrapper-repo: "https://github.com/Start9Labs/lnd-wrapper"
 upstream-repo: "https://github.com/lightningnetwork/lnd"
@@ -222,3 +221,19 @@ actions:
         placeholder: "pubkey@host"
         nullable: false
         default: ""
+  reset-txs:
+    name: "Reset Wallet Transactions"
+    description: "Resets the best synced height of the wallet back to its birthday, or genesis if the birthday isn't known. This is useful for picking up on-chain transactions that may have been missed by LND."
+    warning: ~
+    allowed-statuses:
+      - running
+      - stopped
+    implementation:
+      type: docker
+      image: main
+      system: false
+      entrypoint: reset-txs.sh
+      args: []
+      mounts:
+        main: /root/.lnd
+      io-format: json

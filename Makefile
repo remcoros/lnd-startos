@@ -14,6 +14,7 @@ clean:
 	rm -f $(PKG_ID).s9pk
 	rm -f image.tar
 	rm -f scripts/*.js
+	rm -fr docker-images/
 
 verify: $(PKG_ID).s9pk
 	embassy-sdk verify s9pk $(PKG_ID).s9pk
@@ -29,7 +30,7 @@ arm: docker-images/aarch64.tar scripts/embassy.js
 x86: docker-images/x86_64.tar scripts/embassy.js
 	embassy-sdk pack
 
-$(PKG_ID).s9pk: manifest.yaml instructions.md LICENSE icon.png scripts/embassy.js docker-images/aarch64.tar docker-images/x86_64.tar
+$(PKG_ID).s9pk: manifest.yaml instructions.md LICENSE icon.png scripts/embassy.js docker-images/aarch64.tar docker-images/x86_64.tar actions/*.sh
 	embassy-sdk pack
 
 docker-images/x86_64.tar: Dockerfile docker_entrypoint.sh configurator/target/x86_64-unknown-linux-musl/release/configurator health-check/target/x86_64-unknown-linux-musl/release/health-check 

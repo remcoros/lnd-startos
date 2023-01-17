@@ -1,8 +1,8 @@
 id: lnd
 title: Lightning Network Daemon
-version: 0.15.4.2
+version: 0.15.4.3
 release-notes: |-
-  * Add new action for resetting wallet transactions
+  * Add new action for migration from Umbrel v0.5
 license: mit
 wrapper-repo: "https://github.com/Start9Labs/lnd-wrapper"
 upstream-repo: "https://github.com/lightningnetwork/lnd"
@@ -173,6 +173,37 @@ migrations:
       type: script
       args: ["to"]
 actions:
+  import-umbrel-five:
+    name: "Import from Umbrel (0.5)"
+    description: "Imports wallet and channel data from Umbrel 0.5"
+    warning: "This will destroy existing channel data, please make sure you have no funds on this node before running this action"
+    allowed-statuses:
+      - stopped
+    implementation:
+      type: docker
+      image: main
+      system: false
+      entrypoint: import-umbrel-5.sh
+      args: []
+      io-format: json
+      mounts:
+        main: /root/.lnd
+    input-spec:
+      umbrel-host:
+        type: string
+        name: Umbrel IP Address
+        description: "The IP Address for your Umbrel. You can find this by running the command `ping umbrel.local` while connected to your LAN."
+        masked: false
+        placeholder: "192.168.1.9"
+        nullable: false
+      umbrel-password:
+        type: string
+        name: Umbrel Password
+        description: "The password you use to log into your Umbrel dashboard or SSH"
+        masked: true
+        placeholder: password
+        nullable: false
+        default: ""
   import-umbrel:
     name: "Import from Umbrel (0.4)"
     description: "Imports wallet and channel data from Umbrel 0.4"
@@ -189,6 +220,13 @@ actions:
       mounts:
         main: /root/.lnd
     input-spec:
+      umbrel-host:
+        type: string
+        name: Umbrel IP Address
+        description: "The IP Address for your Umbrel. You can find this by running the command `ping umbrel.local` while connected to your LAN."
+        masked: false
+        placeholder: "192.168.1.9"
+        nullable: false
       umbrel-password:
         type: string
         name: Umbrel Password

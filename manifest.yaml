@@ -1,6 +1,6 @@
 id: lnd
 title: LND
-version: 0.15.5.1
+version: 0.15.5.2
 release-notes: |-
   * LND v0.15.5 [Release Notes](https://github.com/lightningnetwork/lnd/blob/v0-15-5-branch/docs/release-notes/release-notes-0.15.5.md)
   * Add new action for migration from Umbrel v0.5 and update action for migration from Umbrel v0.4
@@ -109,7 +109,7 @@ dependencies:
   btc-rpc-proxy:
     version: ">=0.3.2.6 <0.4.0"
     requirement:
-      type: "opt-out"
+      type: "opt-in"
       how: Can alternatively use the internal full archival bitcoind node or configure an external bitcoin node.
     description: Used to fetch validated blocks.
     config:

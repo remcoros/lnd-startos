@@ -1,19 +1,44 @@
 use bitcoincore_rpc::RpcApi;
 use rand::Rng;
 use serde_json::Value;
-use std::str::FromStr;
-use std::env;
 use std::fs::File;
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::path::Path;
+use std::process::Command;
+use std::str::FromStr;
 use std::{
     io::{Read, Write},
     time::Duration,
 };
 
-use anyhow::anyhow;
 use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
-use x509_parser::pem;
+
+fn parse_iface_ip(output: &str) -> Result<Option<&str>, anyhow::Error> {
+    let output = output.trim();
+    if output.is_empty() {
+        return Ok(None);
+    }
+    if let Some(ip) = output.split_ascii_whitespace().nth(3) {
+        Ok(Some(ip))
+    } else {
+        Err(anyhow::anyhow!("malformed output from `ip`"))
+    }
+}
+
+pub fn get_iface_ipv4_addr(iface: &str) -> Result<Option<Ipv4Addr>, anyhow::Error> {
+    Ok(parse_iface_ip(&String::from_utf8(
+        Command::new("ip")
+            .arg("-4")
+            .arg("-o")
+            .arg("addr")
+            .arg("show")
+            .arg(iface)
+            .output()?
+            .stdout,
+    )?)?
+    .map(|s| Ok::<_, anyhow::Error>(s.split("/").next().unwrap().parse()?))
+    .transpose()?)
+}
 
 struct SkipNulls(Value);
 impl Serialize for SkipNulls {
@@ -158,10 +183,12 @@ pub enum Data {
         lnd_connect_grpc: Property<String>,
         #[serde(rename = "LND Connect REST URL")]
         lnd_connect_rest: Property<String>,
-        #[serde(rename = "NODE URI")]
+        #[serde(rename = "Node URI")]
         node_uri: Property<String>,
-        #[serde(rename = "Alias")]
-        alias: Property<String>,
+        #[serde(rename = "Node Alias")]
+        node_alias: Property<String>,
+        #[serde(rename = "Node Id")]
+        node_id: Property<String>,
     },
     NotReady {
         #[serde(rename = "Not Ready")]
@@ -252,10 +279,7 @@ impl FromStr for WatchtowerUri {
             Some(x) => x.to_string(),
             None => anyhow::bail!("Couldn't parse the address from watchtower URI"),
         };
-        Ok(WatchtowerUri{
-            pubkey , address
-        })
-
+        Ok(WatchtowerUri { pubkey, address })
     }
 }
 
@@ -268,13 +292,7 @@ fn main() -> Result<(), anyhow::Error> {
     let control_tor_address = config.control_tor_address;
     let watchtower_tor_address = config.watchtower_tor_address;
     let peer_tor_address = config.peer_tor_address;
-    
-    if let Some(cmd) = env::args().skip(1).next() {
-        if cmd == "properties" {
-            properties(control_tor_address, peer_tor_address, alias);
-            return Ok(());
-        }
-    }
+
     println!(
         "config fetched. alias = {:?}",
         config.alias.clone().unwrap_or("No alias found".to_owned())
@@ -343,10 +361,15 @@ fn main() -> Result<(), anyhow::Error> {
     let use_neutrino = !(bitcoind_selected && bitcoin_synced);
     println!("use_neutrino = {}", use_neutrino);
 
+    let container_ip = get_iface_ipv4_addr("eth0").unwrap_or_else(|e| {
+        eprintln!("{e}");
+        None
+    });
+
     write!(
         outfile,
         include_str!("lnd.conf.template"),
-        control_tor_address = control_tor_address,
+        container_ip = container_ip.unwrap_or_else(|| [0, 0, 0, 0].into()),
         peer_tor_address = peer_tor_address,
         watchtower_tor_address = watchtower_tor_address,
         payments_expiration_grace_period = config.advanced.payments_expiration_grace_period,
@@ -409,51 +432,13 @@ fn main() -> Result<(), anyhow::Error> {
         wt_server = config.watchtowers.wt_server,
         wt_client = config.watchtowers.wt_client
     )?;
-
-    // TLS Certificate migration from 0.11.0 -> 0.11.1 release (to include tor address)
-    let cert_path = Path::new("/root/.lnd/tls.cert");
-    if cert_path.exists() {
-        let bs = std::fs::read(cert_path)?;
-        let (_, pem) = pem::parse_x509_pem(&bs)?;
-        let cert = pem.parse_x509()?;
-        let subj_alt_name_oid = "2.5.29.17".parse().unwrap();
-        let ext = cert
-            .extensions()
-            .get(&subj_alt_name_oid)
-            .ok_or(anyhow!("No Alternative Names"))?
-            .parsed_extension(); // oid for subject alternative names
-        match ext {
-            x509_parser::extensions::ParsedExtension::SubjectAlternativeName(names) => {
-                if !(&names.general_names).into_iter().any(|a| match *a {
-                    x509_parser::extensions::GeneralName::DNSName(host) => {
-                        host == control_tor_address
-                    }
-                    _ => false,
-                }) {
-                    println!("Replacing Certificates");
-                    // Delete the tls.key
-                    std::fs::remove_file(Path::new("/root/.lnd/tls.key"))?;
-                    // Delete the tls.cert
-                    std::fs::remove_file(Path::new("/root/.lnd/tls.cert"))?;
-                } else {
-                    println!("Certificate check complete. No changes required.");
-                }
-            }
-            _ => panic!("Type does not correspond with OID"),
-        }
-    } // if it doesn't exist, LND will correctly create it this time.
-
     let public_path = Path::new("/root/.lnd/public");
     // Create public directory to make accessible to dependents through the bindmounts interface
-    println!("creating public directory... ");
+    println!("creating public directory...");
     std::fs::create_dir_all(public_path)?;
 
-    let cert_link = public_path.join("tls.cert");
-    if cert_link.exists() {
-        std::fs::remove_file(&cert_link)?;
-    }
-
     // write backup ignore to the root of the mounted volume
+    println!("writing .backupignore...");
     std::fs::write(
         Path::new("/root/.lnd/.backupignore.tmp"),
         include_str!(".backupignore.template"),
@@ -463,19 +448,17 @@ fn main() -> Result<(), anyhow::Error> {
     // background configurator so lnd can start
     #[cfg(target_os = "linux")]
     nix::unistd::daemon(true, true)?;
+    let container_ip = container_ip.unwrap_or_else(|| [127, 0, 0, 1].into());
+    println!("checking port 10009 on {container_ip} (gRPC control port)...");
     loop {
-        if let Ok(_) = std::net::TcpStream::connect(SocketAddr::from(([127, 0, 0, 1], 10009))) {
+        if let Ok(_) = std::net::TcpStream::connect(SocketAddr::from((container_ip, 10009))) {
             break;
         } else {
             std::thread::sleep(std::time::Duration::from_secs(1));
         }
     }
 
-    while !cert_path.exists() {
-        std::thread::sleep(std::time::Duration::from_secs(1));
-    }
-    std::fs::hard_link(cert_path, &cert_link)?;
-
+    println!("checking if we need to restore from channel backup...");
     let use_channel_backup_data = if is_restore(Path::new("/root/.lnd")) {
         println!("Detected Embassy Restore. Conducting precautionary channel backup restoration.");
         let channel_backup_path = Path::new("/root/.lnd/data/chain/bitcoin/mainnet/channel.backup");
@@ -497,6 +480,7 @@ fn main() -> Result<(), anyhow::Error> {
         Ok(None)
     }?;
 
+    println!("unlocking wallet...");
     if Path::new("/root/.lnd/pwd.dat").exists() {
         let pass_file = File::open("/root/.lnd/pwd.dat")?;
         let pass_size = pass_file.metadata().unwrap().len();
@@ -514,7 +498,7 @@ fn main() -> Result<(), anyhow::Error> {
                     .arg("POST")
                     .arg("--cacert")
                     .arg("/root/.lnd/tls.cert")
-                    .arg("https://127.0.0.1:8080/v1/unlockwallet")
+                    .arg("https://lnd.embassy:8080/v1/unlockwallet")
                     .arg("-d")
                     .arg(serde_json::to_string(&SkipNulls(serde_json::json!({
                         "wallet_password": base64::encode(&password_bytes),
@@ -584,11 +568,11 @@ fn main() -> Result<(), anyhow::Error> {
                             .arg("--no-progress-meter")
                             .arg("-X")
                             .arg("POST")
-                            .arg("--cacert")
-                            .arg("/root/.lnd/tls.cert")
                             .arg("--header")
                             .arg(format!("Grpc-Metadata-macaroon: {}", mac_encoded))
-                            .arg("https://127.0.0.1:8080/v1/channels/backup/restore")
+                            .arg("--cacert")
+                            .arg("/root/.lnd/tls.cert")
+                            .arg("https://lnd.embassy:8080/v1/channels/backup/restore")
                             .arg("-d")
                             .arg(serde_json::to_string(&backups)?)
                             .output()?;
@@ -652,7 +636,7 @@ fn main() -> Result<(), anyhow::Error> {
             .arg("GET")
             .arg("--cacert")
             .arg("/root/.lnd/tls.cert")
-            .arg("https://127.0.0.1:8080/v1/genseed")
+            .arg("https://lnd.embassy:8080/v1/genseed")
             .arg("-d")
             .arg(format!("{}", serde_json::json!({})))
             .output()?;
@@ -669,7 +653,7 @@ fn main() -> Result<(), anyhow::Error> {
             .arg("POST")
             .arg("--cacert")
             .arg("/root/.lnd/tls.cert")
-            .arg("https://127.0.0.1:8080/v1/initwallet")
+            .arg("https://lnd.embassy:8080/v1/initwallet")
             .arg("-d")
             .arg(format!(
                 "{}",
@@ -686,6 +670,7 @@ fn main() -> Result<(), anyhow::Error> {
             return Err(anyhow::anyhow!("Error creating wallet. Exiting."));
         }
     }
+    println!("copying macaroon to public dir...");
     while !Path::new("/root/.lnd/data/chain/bitcoin/mainnet/admin.macaroon").exists() {
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
@@ -698,8 +683,9 @@ fn main() -> Result<(), anyhow::Error> {
             )?;
         }
     }
- 
-    if true { 
+
+
+    if true {
         let mac = std::fs::read(Path::new(
             "/root/.lnd/data/chain/bitcoin/mainnet/admin.macaroon",
         ))?;
@@ -713,18 +699,22 @@ fn main() -> Result<(), anyhow::Error> {
                 let stat;
                 loop {
                     println!("Configuring Watchtower for {}... ", alias);
-                    println!("pubkey: {} || host: {}", &parsed_watchtower_uri.pubkey, &parsed_watchtower_uri.address);
+                    println!(
+                        "pubkey: {} || host: {}",
+                        &parsed_watchtower_uri.pubkey, &parsed_watchtower_uri.address
+                    );
                     let bytes: Vec<u8> = hex::decode(&parsed_watchtower_uri.pubkey)?;
-                    let hex_encoded: String = base64::encode_config(&bytes, base64::URL_SAFE_NO_PAD);
+                    let hex_encoded: String =
+                        base64::encode_config(&bytes, base64::URL_SAFE_NO_PAD);
                     std::thread::sleep(Duration::from_secs(5));
                     let cmd = process::Command::new("curl")
                         .arg("--no-progress-meter")
                         .arg("-X")
                         .arg("POST")
-                        .arg("--cacert")
-                        .arg("/root/.lnd/tls.cert")
                         .arg("--header")
                         .arg(format!("Grpc-Metadata-macaroon: {}", mac_encoded))
+                        .arg("--cacert")
+                        .arg("/root/.lnd/tls.cert")
                         .arg("https://lnd.embassy:8080/v2/watchtower/client")
                         .arg("-d")
                         .arg(format!(
@@ -779,6 +769,7 @@ fn main() -> Result<(), anyhow::Error> {
     };
 
     if bitcoind_selected {
+        println!("looping forever to see if we need to switch backends...");
         loop {
             let bitcoin_synced = match bitcoin_is_synced(rpc_info) {
                 Ok(bs) => bs,
@@ -801,201 +792,11 @@ fn main() -> Result<(), anyhow::Error> {
         }
     };
 
+    println!("configurator exiting...");
+
     Ok(())
 }
 
-fn get_stats(
-    control_tor_address: String,
-    peer_tor_address: String,
-    alias: String,
-) -> Result<Properties, anyhow::Error> {
-    let mut macaroon_file = File::open("/root/.lnd/data/chain/bitcoin/mainnet/admin.macaroon")?;
-    let mut macaroon_vec = Vec::with_capacity(macaroon_file.metadata()?.len() as usize);
-    let tls_cert = std::fs::read_to_string("/root/.lnd/tls.cert")?;
-    macaroon_file.read_to_end(&mut macaroon_vec)?;
-    let mac_encoded = hex::encode_upper(&macaroon_vec);
-    let node_info: Option<LndGetInfoRes> = serde_json::from_slice(
-        &std::process::Command::new("curl")
-            .arg("--no-progress-meter")
-            .arg("--cacert")
-            .arg("/root/.lnd/tls.cert")
-            .arg("--header")
-            .arg(format!("Grpc-Metadata-macaroon: {}", mac_encoded))
-            .arg("https://lnd.embassy:8080/v1/getinfo")
-            .output()?
-            .stdout,
-    )
-    .or::<anyhow::Error>(Ok(None))?;
-    let stats: Properties = match node_info {
-        Some(ni) => {
-            let lnd_connect_grpc = Property {
-                value_type: "string".to_owned(),
-                value: format!(
-                    "lndconnect://{control_tor_address}:10009?cert={cert}&macaroon={macaroon}",
-                    control_tor_address = control_tor_address,
-                    cert = base64::encode_config(
-                        base64::decode(
-                            tls_cert
-                                .lines()
-                                .filter(|l| !l.is_empty())
-                                .filter(|l| *l != "-----BEGIN CERTIFICATE-----")
-                                .filter(|l| *l != "-----END CERTIFICATE-----")
-                                .collect::<String>()
-                        )?,
-                        base64::Config::new(base64::CharacterSet::UrlSafe, false)
-                    ),
-                    macaroon = base64::encode_config(
-                        &macaroon_vec,
-                        base64::Config::new(base64::CharacterSet::UrlSafe, false)
-                    ),
-                ),
-                description: Some(
-                    "Use this for other applications that require a gRPC connection".to_owned(),
-                ),
-                copyable: true,
-                qr: true,
-                masked: true,
-            };
-            let lnd_connect_rest = Property {
-                value_type: "string".to_owned(),
-                value: format!(
-                    "lndconnect://{control_tor_address}:8080?cert={cert}&macaroon={macaroon}",
-                    control_tor_address = control_tor_address,
-                    cert = base64::encode_config(
-                        base64::decode(
-                            tls_cert
-                                .lines()
-                                .filter(|l| !l.is_empty())
-                                .filter(|l| *l != "-----BEGIN CERTIFICATE-----")
-                                .filter(|l| *l != "-----END CERTIFICATE-----")
-                                .collect::<String>()
-                        )?,
-                        base64::Config::new(base64::CharacterSet::UrlSafe, false)
-                    ),
-                    macaroon = base64::encode_config(
-                        &macaroon_vec,
-                        base64::Config::new(base64::CharacterSet::UrlSafe, false)
-                    ),
-                ),
-                description: Some(
-                    "Use this for other applications that require a REST connection".to_owned(),
-                ),
-                copyable: true,
-                qr: true,
-                masked: true,
-            };
-            let node_uri = Property {
-                value_type: "string".to_owned(),
-                value: format!(
-                    "{pubkey}@{peer_tor_address}:9735",
-                    pubkey = ni.identity_pubkey,
-                    peer_tor_address = peer_tor_address
-                ),
-                description: Some(
-                    "Give this to others to allow them to add your LND node as a peer".to_owned(),
-                ),
-                copyable: true,
-                qr: true,
-                masked: false,
-            };
-            let stats = Properties {
-                version: 2,
-                data: Data::LND{
-                    sync_height: Property {
-                        value_type: "string".to_owned(),
-                        value: format!("{}", ni.block_height),
-                        description: Some(
-                            "The latest block height that has been processed by LND".to_owned(),
-                        ),
-                        copyable: false,
-                        qr: false,
-                        masked: false,
-                    },
-                    synced_to_chain: Property {
-                        value_type: "string".to_owned(),
-                        value: if ni.synced_to_chain {
-                            "✅".to_owned()
-                        } else {
-                            "❌".to_owned()
-                        },
-                        description: Some("Until this value is ✅, you may not be able to see transactions sent to your on chain wallet.".to_owned()),
-                        copyable: false,
-                        qr: false,
-                        masked: false,
-                    },
-                    synced_to_graph: Property {
-                        value_type: "string".to_owned(),
-                        value: if ni.synced_to_graph {
-                            "✅".to_owned()
-                        } else {
-                            "❌".to_owned()
-                        },
-                        description: Some("Until this value is ✅, you will experience problems sending payments over lightning.".to_owned()),
-                        copyable: false,
-                        qr: false,
-                        masked: false,
-                    },
-                    lnd_connect_grpc,
-                    lnd_connect_rest,
-                    node_uri,
-                    alias: Property {
-                        value_type: "string".to_owned(),
-                        value: alias,
-                        description: Some("The human readable name your node can identify as on the Lightning Network".to_owned()),
-                        copyable: false,
-                        qr: false,
-                        masked: false,
-                    }
-                },
-            };
-            serde_yaml::to_writer(File::create("/root/.lnd/start9/stats.yaml")?, &stats)?;
-            stats
-        }
-        None => {
-            const PROPERTIES_FALLBACK_MESSAGE: &str =
-                "Could not find properties. The service might still be starting";
-            let stats_path = Path::new("/root/.lnd").join("start9/stats.yaml");
-            if stats_path.exists() {
-                let stats: Properties =
-                    serde_yaml::from_reader(File::open(stats_path).unwrap()).unwrap();
-                stats
-            } else {
-                let stats = Properties {
-                    version: 2,
-                    data: Data::NotReady {
-                        not_ready: Property {
-                            value_type: "string".to_owned(),
-                            value: PROPERTIES_FALLBACK_MESSAGE.to_owned(),
-                            description: Some(
-                                "Fallback Message When Properties could not be found".to_owned(),
-                            ),
-                            copyable: false,
-                            qr: false,
-                            masked: false,
-                        },
-                    },
-                };
-                stats
-            }
-        }
-    };
-    Ok(stats)
-}
-
-fn properties(control_tor_address: String, peer_tor_address: String, alias: String) -> () {
-    let stats = match get_stats(control_tor_address, peer_tor_address, alias) {
-        Err(e) => {
-            println!("Warn: {:?}", e);
-            return;
-        }
-        Ok(v) => v,
-    };
-
-    use std::io::stdout;
-    if let Err(e) = serde_yaml::to_writer(stdout(), &stats) {
-        println!("Warn: {:?}", e);
-    }
-}
 
 #[derive(Serialize, Deserialize)]
 struct JsonRpc1Res {

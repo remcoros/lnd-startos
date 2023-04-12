@@ -1,10 +1,9 @@
 id: lnd
 title: LND
-version: 0.15.5.2
+version: 0.16.0
 release-notes: |-
-  * LND v0.15.5 [Release Notes](https://github.com/lightningnetwork/lnd/blob/v0-15-5-branch/docs/release-notes/release-notes-0.15.5.md)
-  * Add new action for migration from Umbrel v0.5 and update action for migration from Umbrel v0.4
-  * Updated service name from Lightning Network Daemon to LND
+  * LND v0.16.0 [Release Notes](https://github.com/lightningnetwork/lnd/blob/master/docs/release-notes/release-notes-0.16.0.md)
+  * Start9 packaging performance updates and bugfixes
 license: mit
 wrapper-repo: "https://github.com/Start9Labs/lnd-wrapper"
 upstream-repo: "https://github.com/lightningnetwork/lnd"
@@ -28,6 +27,7 @@ main:
   mounts:
     # main data directory - also needed to preserve data in 0.2.x migration
     main: /root/.lnd
+    certificates: /mnt/cert
 health-checks:
   synced:
     name: Synced
@@ -44,16 +44,7 @@ config: # if you dont provide an io format in cases like config where its necess
   set:
     type: script
 properties:
-  type: docker
-  image: main
-  system: false
-  entrypoint: configurator
-  args:
-    - properties
-  mounts:
-    main: /root/.lnd
-  io-format: yaml
-  inject: false
+  type: script
 volumes:
   # this is the image where data will go from 0.2.x
   main:
@@ -84,6 +75,7 @@ interfaces:
     protocols:
       - tcp
       - http
+      - https
       - grpc
   watchtower:
     name: Watchtower Interface

@@ -1,21 +1,34 @@
-FROM golang:alpine3.13 AS builder
+FROM golang:alpine3.16 AS builder
 
 RUN apk update
 RUN apk add make git wget
 RUN apk add --no-cache yq --repository=http://dl-cdn.alpinelinux.org/alpine/edge/community
-    
-ADD . /root
+
+ADD ./lnd /root/lnd
 
 WORKDIR /root/lnd
 
 RUN make -j24 install tags="autopilotrpc signrpc walletrpc chainrpc invoicesrpc routerrpc watchtowerrpc"
 
-FROM alpine:3.12 as runner
-
-RUN apk update
-RUN apk add tini curl sshpass jq openssh-client bash xxd
+FROM alpine:3.16 as runner
 
 ARG ARCH
+ARG PLATFORM
+RUN apk update
+RUN apk add \
+    bash \
+    coreutils \
+    curl \
+    jq \
+    netcat-openbsd \
+    openssh-client \
+    openssl \
+    sshpass \
+    xxd \
+    ca-certificates
+
+RUN wget https://github.com/mikefarah/yq/releases/download/v4.25.3/yq_linux_${PLATFORM}.tar.gz -O - |\
+    tar xz && mv yq_linux_${PLATFORM} /usr/bin/yq
 
 COPY --from=builder /go/bin /usr/local/bin
 COPY --from=builder /usr/bin/yq /usr/local/bin/yq
@@ -29,7 +42,5 @@ ADD ./actions/reset-txs.sh /usr/local/bin/reset-txs.sh
 RUN chmod a+x /usr/local/bin/*.sh
 
 WORKDIR /root
-
-EXPOSE 9735 8080
 
 ENTRYPOINT ["/usr/local/bin/docker_entrypoint.sh"]

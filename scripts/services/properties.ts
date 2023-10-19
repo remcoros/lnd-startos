@@ -8,6 +8,7 @@ const nodeInfoMatcher = shape({
   synced_to_chain: boolean,
   synced_to_graph: boolean,
 });
+
 const noPropertiesFound = {
   result: {
     version: 2,
@@ -23,6 +24,7 @@ const noPropertiesFound = {
     },
   },
 } as const;
+
 const wrongShape = (wrongValue: unknown): T.ResultType<T.Properties> =>
   ({
     result: {
@@ -57,11 +59,16 @@ export const properties: T.ExpectedExports.properties = async (
     macaroonHex,
     macaroonBase64URL,
     cert,
+    towerServerUrl,
     cipherSeedMnemonic,
   ] = await Promise.all([
     ...paths.map(async (path) =>
       (await effects.readFile({ volumeId: "main", path })).trim()
     ),
+    effects.readFile({
+      volumeId: "main",
+      path: "start9/towerServerUrl",
+    }).catch(() => "no Tower Server found"),
     effects.readFile({
       volumeId: "main",
       path: "start9/cipherSeedMnemonic.txt",
@@ -80,32 +87,6 @@ export const properties: T.ExpectedExports.properties = async (
     const stats: T.Properties = {
       version: 2,
       data: {
-        "LND Sync Height": {
-          type: "string",
-          value: String(nodeInfoJson.block_height),
-          description: "The latest block height that has been processed by LND",
-          copyable: false,
-          qr: false,
-          masked: false,
-        },
-        "Synced To Chain": {
-          type: "string",
-          value: nodeInfoJson.synced_to_chain ? "✅" : "❌",
-          description:
-            "Until this value is ✅, you may not be able to see transactions sent to your on chain wallet.",
-          copyable: false,
-          qr: false,
-          masked: false,
-        },
-        "Synced To Graph": {
-          type: "string",
-          value: nodeInfoJson.synced_to_graph ? "✅" : "❌",
-          description:
-            "Until this value is ✅, you will experience problems sending payments over lightning.",
-          copyable: false,
-          qr: false,
-          masked: false,
-        },
         "Node Alias": {
           type: "string",
           value: nodeInfoJson.alias,
@@ -121,7 +102,7 @@ export const properties: T.ExpectedExports.properties = async (
             "The node identifier that other nodes can use to connect to this node",
           copyable: true,
           qr: false,
-          masked: false,
+          masked: true,
         },
         "Node URI": {
           type: "string",
@@ -130,7 +111,7 @@ export const properties: T.ExpectedExports.properties = async (
             "Give this to others to allow them to add your LND node as a peer",
           copyable: true,
           qr: true,
-          masked: false,
+          masked: true,
         },
         "LND Connect gRPC URL": {
           type: "string",
@@ -158,6 +139,17 @@ export const properties: T.ExpectedExports.properties = async (
           qr: false,
           masked: true,
         },
+        ...(towerServerUrl !== "no Tower Server found")
+        ? {
+          "Tower Server": {
+            type: "string",
+            value: towerServerUrl,
+            description: "Sharing this URL with other LND nodes will allow them to use your server as a watchtower.",
+            copyable: true,
+            qr: true,
+            masked: true,
+          }
+        } : {}
       },
     }; // Include the original stats object here
 

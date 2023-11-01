@@ -253,7 +253,7 @@ export const getConfig: T.ExpectedExports.getConfig = compat.getConfig({
   "watchtowers": {
     "type": "object",
     "name": "Watchtowers",
-    "description": "Watchtower Settings",
+    "description": "Watchtower Settings: A watchtower is a feature of a Lightning node that allows you to watch a node for potential channel breaches (the watchtower server). This functionality comes bundled in LND, but needs to be specifically enabled. Two nodes can act as each other’s watchtowers, meaning they simultaneously operate in server and client mode.",
     "spec": {
       "wt-server": {
         "type": "boolean",
@@ -263,24 +263,41 @@ export const getConfig: T.ExpectedExports.getConfig = compat.getConfig({
         "default": false,
       },
       "wt-client": {
-        "type": "boolean",
+        "type": "union",
         "name": "Enable Watchtower Client",
         "description":
           "Allow your node to find other watchtower servers on the network.",
-        "default": false,
-      },
-      "add-watchtowers": {
-        "type": "list",
-        "name": "Add Watchtowers",
-        "description": "Add URIs of Watchtowers to connect to.",
-        "range": "[0,*)",
-        "subtype": "string",
-        "spec": {
-          "masked": false,
-          "copyable": true,
-          "placeholder": "pubkey@host",
+        // "nullable": true,
+        tag: {
+          id: "enabled",
+          name: "Watchtower Client Enabled",
+          description: "Enable or disable Watchtower Client",
+          "variant-names": {
+            disabled: "Disabled",
+            enabled: "Enabled",
+          },
         },
-        "default": [],
+        "default": "disabled",
+        variants: {
+          disabled: {},
+          enabled: {
+            "add-watchtowers": {
+              "type": "list",
+              "name": "Add Watchtowers",
+              "description":
+                "Add URIs of Watchtowers to connect to.",
+              "range": "[1,*)",
+              "subtype": "string",
+              "spec": {
+                "masked": false,
+                "copyable": true,
+                "placeholder":
+                  "pubkey@host:9911",
+              },
+              "default": Array<string>(),
+            },
+          }
+        }
       },
     },
   },

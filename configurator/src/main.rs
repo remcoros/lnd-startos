@@ -1,3 +1,4 @@
+use base32::Alphabet;
 use bitcoincore_rpc::RpcApi;
 use rand::Rng;
 use serde_json::Value;
@@ -38,6 +39,10 @@ pub fn get_iface_ipv4_addr(iface: &str) -> Result<Option<Ipv4Addr>, anyhow::Erro
     )?)?
     .map(|s| Ok::<_, anyhow::Error>(s.split("/").next().unwrap().parse()?))
     .transpose()?)
+}
+
+fn pw_is_typeable(pw: &[u8]) -> bool {
+    pw.iter().all(|&byte| byte >= 32 && byte <= 126) // Space - ~
 }
 
 struct SkipNulls(Value);
@@ -97,9 +102,7 @@ enum WtClient {
     #[serde(rename_all = "kebab-case")]
     Disabled,
     #[serde(rename_all = "kebab-case")]
-    Enabled {
-        add_watchtowers: Vec<String>
-    }
+    Enabled { add_watchtowers: Vec<String> },
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -170,6 +173,7 @@ struct AdvancedConfig {
     default_remote_max_htlcs: usize,
     max_channel_fee_allocation: f64,
     max_commit_fee_rate_anchors: usize,
+    max_pending_channels: usize,
     protocol_wumbo_channels: bool,
     protocol_no_anchors: bool,
     protocol_disable_script_enforced_lease: bool,
@@ -227,14 +231,6 @@ pub struct CipherSeedMnemonic {
     cipher_seed_mnemonic: Vec<String>,
 }
 
-#[derive(serde::Deserialize, Debug)]
-pub struct LndGetInfoRes {
-    identity_pubkey: String,
-    block_height: u32,
-    synced_to_chain: bool,
-    synced_to_graph: bool,
-}
-
 fn get_alias(config: &Config) -> Result<String, anyhow::Error> {
     Ok(match &config.alias {
         // if it isn't defined in the config
@@ -276,7 +272,7 @@ pub fn local_port_available(port: u16) -> Result<bool, anyhow::Error> {
         }
     }
 }
-                
+
 fn save_to_file(cipher_seed_mnemonic: &[String], file_path: &str) -> io::Result<()> {
     let mut file = File::create(file_path)?;
     for (i, word) in cipher_seed_mnemonic.iter().enumerate() {
@@ -399,6 +395,7 @@ fn main() -> Result<(), anyhow::Error> {
         default_remote_max_htlcs = config.advanced.default_remote_max_htlcs,
         reject_htlc = config.reject_htlc,
         max_channel_fee_allocation = config.advanced.max_channel_fee_allocation,
+        max_pending_channels = config.advanced.max_pending_channels,
         max_commit_fee_rate_anchors = config.advanced.max_commit_fee_rate_anchors,
         accept_keysend = config.accept_keysend,
         accept_amp = config.accept_amp,
@@ -446,7 +443,7 @@ fn main() -> Result<(), anyhow::Error> {
         wt_server = config.watchtowers.wt_server,
         wt_client = match config.watchtowers.wt_client {
             WtClient::Disabled => false,
-            _ => true
+            _ => true,
         }
     )?;
     let public_path = Path::new("/root/.lnd/public");
@@ -499,159 +496,184 @@ fn main() -> Result<(), anyhow::Error> {
 
     println!("unlocking wallet...");
     if Path::new("/root/.lnd/pwd.dat").exists() {
-        let pass_file = File::open("/root/.lnd/pwd.dat")?;
-        let pass_size = pass_file.metadata().unwrap().len();
-        let mut password_bytes = Vec::with_capacity(pass_size as usize);
-        pass_file.take(pass_size).read_to_end(&mut password_bytes)?;
-        let status = {
-            use std::process;
-            let mut res;
-            let stat;
-            loop {
-                std::thread::sleep(Duration::from_secs(5));
-                let cmd = process::Command::new("curl")
-                    .arg("--no-progress-meter")
-                    .arg("-X")
-                    .arg("POST")
-                    .arg("--cacert")
-                    .arg("/root/.lnd/tls.cert")
-                    .arg("https://lnd.embassy:8080/v1/unlockwallet")
-                    .arg("-d")
-                    .arg(serde_json::to_string(&SkipNulls(serde_json::json!({
-                        "wallet_password": base64::encode(&password_bytes),
-                        "recovery_window": config.advanced.recovery_window,
-                    })))?)
-                    .stdin(process::Stdio::piped())
-                    .stdout(process::Stdio::piped())
-                    .stderr(process::Stdio::piped())
-                    .spawn()?;
-                res = cmd.wait_with_output()?;
-                let output = String::from_utf8(res.stdout)?.parse::<Value>()?;
-                match output.as_object() {
-                    None => {
-                        stat = Err(anyhow::anyhow!(
-                            "Invalid output from wallet unlock attempt: {:?}",
-                            output
-                        ));
-                        break;
-                    }
-                    Some(o) => match o.get("message") {
+        let password_bytes = std::fs::read("/root/.lnd/pwd.dat")?;
+        let pw_typeable = pw_is_typeable(&password_bytes);
+        let status;
+        if !pw_typeable {
+            let base_32_pw = base32::encode(Alphabet::RFC4648 { padding: false }, &password_bytes);
+            status = {
+                use std::process;
+                let mut res;
+                let stat;
+                loop {
+                    std::thread::sleep(Duration::from_secs(5));
+                    let cmd = process::Command::new("curl")
+                        .arg("--no-progress-meter")
+                        .arg("-X")
+                        .arg("POST")
+                        .arg("--cacert")
+                        .arg("/root/.lnd/tls.cert")
+                        .arg("https://lnd.embassy:8080/v1/changepassword")
+                        .arg("-d")
+                        .arg(serde_json::to_string(&SkipNulls(serde_json::json!({
+                            "current_password": base64::encode(&password_bytes),
+                            "new_password": base64::encode(&base_32_pw),
+                        })))?)
+                        .stdin(process::Stdio::piped())
+                        .stdout(process::Stdio::piped())
+                        .stderr(process::Stdio::piped())
+                        .spawn()?;
+                    res = cmd.wait_with_output()?;
+                    let output = String::from_utf8(res.stdout)?.parse::<Value>()?;
+                    match output.as_object() {
                         None => {
-                            stat = Ok(output);
+                            stat = Err(anyhow::anyhow!(
+                                "Invalid output from changepassword attempt: {:?}",
+                                output
+                            ));
                             break;
                         }
-                        Some(v) => match v.as_str() {
+                        Some(o) => match o.get("message") {
                             None => {
-                                stat = Err(anyhow::anyhow!(
-                                    "Invalid error output from wallet unlock attempt: {:?}",
-                                    v
-                                ));
+                                stat = Ok(output);
+                                std::fs::write("/root/.lnd/new_pwd.dat", &base_32_pw)?;
+                                std::fs::rename("/root/.lnd/new_pwd.dat", "/root/.lnd/pwd.dat")?;
+                                println!("Wallet password successfully converted to base32");
                                 break;
                             }
-                            Some(s) => {
-                                if s.contains("waiting to start") {
-                                    continue;
-                                } else {
-                                    stat = Err(anyhow::anyhow!("{}", s));
+                            Some(v) => match v.as_str() {
+                                None => {
+                                    stat = Err(anyhow::anyhow!(
+                                        "Invalid error output from changepassword attempt: {:?}",
+                                        v
+                                    ));
                                     break;
                                 }
-                            }
+                                Some(s) => {
+                                    if s.contains("waiting to start") {
+                                        continue;
+                                    } else {
+                                        stat = Err(anyhow::anyhow!("{}", s));
+                                        break;
+                                    }
+                                }
+                            },
                         },
-                    },
+                    }
                 }
-            }
-            stat
-        };
+                stat
+            };
+        } else {
+            status = {
+                use std::process;
+                let mut res;
+                let stat;
+                loop {
+                    std::thread::sleep(Duration::from_secs(5));
+                    let cmd = process::Command::new("curl")
+                        .arg("--no-progress-meter")
+                        .arg("-X")
+                        .arg("POST")
+                        .arg("--cacert")
+                        .arg("/root/.lnd/tls.cert")
+                        .arg("https://lnd.embassy:8080/v1/unlockwallet")
+                        .arg("-d")
+                        .arg(serde_json::to_string(&SkipNulls(serde_json::json!({
+                            "wallet_password": base64::encode(&password_bytes),
+                            "recovery_window": config.advanced.recovery_window,
+                        })))?)
+                        .stdin(process::Stdio::piped())
+                        .stdout(process::Stdio::piped())
+                        .stderr(process::Stdio::piped())
+                        .spawn()?;
+                    res = cmd.wait_with_output()?;
+                    let output = String::from_utf8(res.stdout)?.parse::<Value>()?;
+                    match output.as_object() {
+                        None => {
+                            stat = Err(anyhow::anyhow!(
+                                "Invalid output from wallet unlock attempt: {:?}",
+                                output
+                            ));
+                            break;
+                        }
+                        Some(o) => match o.get("message") {
+                            None => {
+                                stat = Ok(output);
+                                break;
+                            }
+                            Some(v) => match v.as_str() {
+                                None => {
+                                    stat = Err(anyhow::anyhow!(
+                                        "Invalid error output from wallet unlock attempt: {:?}",
+                                        v
+                                    ));
+                                    break;
+                                }
+                                Some(s) => {
+                                    if s.contains("waiting to start") {
+                                        continue;
+                                    } else {
+                                        stat = Err(anyhow::anyhow!("{}", s));
+                                        break;
+                                    }
+                                }
+                            },
+                        },
+                    }
+                }
+                stat
+            };
+        }
         match status {
             Err(e) => {
-                println!("{}", e);
+                eprintln!("{}", e);
                 return Err(anyhow::anyhow!("Error unlocking wallet. Exiting."));
             }
             // wallet unlocking has to happen while LND running (encrypted on disk) creds are stored in separate place on disk (pwd.dat in our case - in data volume)
             Ok(_) => match use_channel_backup_data {
                 None => (),
-                Some(backups) => {
-                    while local_port_available(8080)? {
-                        std::thread::sleep(Duration::from_secs(20))
-                    }
-                    let mac = std::fs::read(Path::new(
-                        "/root/.lnd/data/chain/bitcoin/mainnet/admin.macaroon",
-                    ))?;
-                    let mac_encoded = hex::encode_upper(mac);
-                    let stat;
-                    loop {
-                        std::thread::sleep(Duration::from_secs(5));
-                        let output = std::process::Command::new("curl")
-                            .arg("--no-progress-meter")
-                            .arg("-X")
-                            .arg("POST")
-                            .arg("--header")
-                            .arg(format!("Grpc-Metadata-macaroon: {}", mac_encoded))
-                            .arg("--cacert")
-                            .arg("/root/.lnd/tls.cert")
-                            .arg("https://lnd.embassy:8080/v1/channels/backup/restore")
-                            .arg("-d")
-                            .arg(serde_json::to_string(&backups)?)
-                            .output()?;
-                        let output = String::from_utf8(output.stdout)?.parse::<Value>()?;
-                        println!("{}", output);
-                        match output.as_object() {
-                            None => {
-                                stat = Err(anyhow::anyhow!(
-                                    "Invalid output from backup restoration attempt: {:?}",
-                                    output
-                                ));
-                                break;
-                            }
-                            Some(o) => match o.get("message") {
-                                None => {
-                                    stat = Ok(output);
-                                    break;
-                                }
-                                Some(v) => match v.as_str() {
-                                    None => {
-                                        stat = Err(anyhow::anyhow!(
-                                            "Invalid error output from backup restoration attempt: {:?}",
-                                            v
-                                        ));
-                                        break;
-                                    }
-                                    Some(s) => {
-                                        if s.contains("server is still in the process of starting")
-                                        {
-                                            continue;
-                                        } else {
-                                            stat = Err(anyhow::anyhow!("{}", s));
-                                            break;
-                                        }
-                                    }
-                                },
-                            },
-                        }
-                    }
-                    match stat {
-                        Err(e) => {
-                            eprintln!("Error restoring wallet. Exiting.");
-                            return Err(e);
-                        }
-                        Ok(_) => {
-                            println!("Successfully restored wallet.");
+                Some(_backups) => loop {
+                    std::thread::sleep(Duration::from_secs(5));
+                    let output = Command::new("lncli")
+                        .arg("--rpcserver=lnd.embassy")
+                        .arg("restorechanbackup")
+                        .arg("--multi_file")
+                        .arg("/root/.lnd/data/chain/bitcoin/mainnet/channel.backup")
+                        .output();
+                    match output {
+                        Ok(output) if output.status.success() => {
+                            println!("SCB recovery initiated.");
                             reset_restore(Path::new("/root/.lnd"))?;
+                            break;
+                        }
+                        Ok(output) => {
+                            let stderr = String::from_utf8_lossy(&output.stderr);
+                            if stderr.contains("waiting to start") {
+                                continue;
+                            } else {
+                                eprintln!("Error initiating SCB recovery: {}", stderr);
+                                return Err(anyhow::anyhow!("{}", stderr));
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to run lncli: {}", e);
+                            return Err(anyhow::anyhow!("{}", e));
                         }
                     }
-                }
+                },
             },
         }
     } else {
-
         let mut cipher_seed_created = false;
-        let mut password_bytes = [0; 16];
-        let mut dev_random = File::open("/dev/random")?;
+        println!("creating password data");
+        let password_bytes = {
+            let mut buf = [0; 16];
+            File::open("/dev/random")?.read_exact(&mut buf)?;
+            base32::encode(Alphabet::RFC4648 { padding: false }, &buf).into_bytes()
+        };
         let file_path = "/root/.lnd/start9/cipherSeedMnemonic.txt";
 
         while !cipher_seed_created {
-            println!("creating password data");
-            dev_random.read_exact(&mut password_bytes)?;
             let output = std::process::Command::new("curl")
                 .arg("--no-progress-meter")
                 .arg("-X")
@@ -666,10 +688,11 @@ fn main() -> Result<(), anyhow::Error> {
                 eprintln!("{}", std::str::from_utf8(&output.stderr)?);
                 return Err(anyhow::anyhow!("Error generating seed. Exiting."));
             }
-            
+
             if let Ok(CipherSeedMnemonic {
                 cipher_seed_mnemonic,
-            }) = serde_json::from_slice(&output.stdout) {
+            }) = serde_json::from_slice(&output.stdout)
+            {
                 println!("CipherSeed successfully generated");
 
                 if let Err(err) = save_to_file(&cipher_seed_mnemonic, file_path) {
@@ -677,7 +700,7 @@ fn main() -> Result<(), anyhow::Error> {
                 } else {
                     println!("CipherSeedMnemonic saved to '{}'", file_path);
                 }
-        
+
                 let status = std::process::Command::new("curl")
                     .arg("--no-progress-meter")
                     .arg("-X")
@@ -695,8 +718,7 @@ fn main() -> Result<(), anyhow::Error> {
                     ))
                     .status()?;
                 if status.success() {
-                    let mut pass_file = File::create("/root/.lnd/pwd.dat")?;
-                    pass_file.write_all(&password_bytes)?;
+                    std::fs::write("/root/.lnd/pwd.dat", &password_bytes)?;
                 } else {
                     return Err(anyhow::anyhow!("Error creating wallet. Exiting."));
                 }
@@ -707,7 +729,7 @@ fn main() -> Result<(), anyhow::Error> {
             }
         }
     }
-    
+
     println!("copying macaroon to public dir...");
     while !Path::new("/root/.lnd/data/chain/bitcoin/mainnet/admin.macaroon").exists() {
         std::thread::sleep(std::time::Duration::from_secs(1));
@@ -731,37 +753,41 @@ fn main() -> Result<(), anyhow::Error> {
                 println!("The towerServerUrl file has been deleted successfully.");
             }
         }
-        true => {
-            loop {
-                let output =Command::new("lncli")
-                    .arg("--rpcserver=lnd.embassy")
-                    .arg("tower")
-                    .arg("info")
-                    .output();
-                match output {
-                    Ok(output) if output.status.success() => {
-                        println!("Tower server {:?} started", &output);
-                        let tower_info_response = String::from_utf8_lossy(&output.stdout);
-                        let tower_server: TowerInfo = serde_json::from_str(&tower_info_response).expect("Failed to parse Tower Info JSON response");
-                        let result = std::fs::write("/root/.lnd/start9/towerServerUrl", &tower_server.uris[0]);
-                        match result {
-                            Ok(_) => {println!("Tower {} written towerServerUrl", &tower_server.uris[0]);}
-                            Err(err) => {println!("Error writing Tower server to Properties: {}", err);}
+        true => loop {
+            let output = Command::new("lncli")
+                .arg("--rpcserver=lnd.embassy")
+                .arg("tower")
+                .arg("info")
+                .output();
+            match output {
+                Ok(output) if output.status.success() => {
+                    println!("Tower server {:?} started", &output);
+                    let tower_info_response = String::from_utf8_lossy(&output.stdout);
+                    let tower_server: TowerInfo = serde_json::from_str(&tower_info_response)
+                        .expect("Failed to parse Tower Info JSON response");
+                    let result =
+                        std::fs::write("/root/.lnd/start9/towerServerUrl", &tower_server.uris[0]);
+                    match result {
+                        Ok(_) => {
+                            println!("Tower {} written towerServerUrl", &tower_server.uris[0]);
                         }
-                        break;
+                        Err(err) => {
+                            println!("Error writing Tower server to Properties: {}", err);
+                        }
                     }
-                    Ok(output) => {
-                        let stderr = String::from_utf8_lossy(&output.stderr);
-                        println!("Failed to retreive tower info with error: {}", stderr);
-                        std::thread::sleep(Duration::from_secs(10));
-                    }
-                    Err(_) => {
-                        println!("Error running the command: lncli --rpcserver=lnd.embassy tower info");
-                        std::thread::sleep(Duration::from_secs(10));
-                    }
+                    break;
+                }
+                Ok(output) => {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    println!("Failed to retreive tower info with error: {}", stderr);
+                    std::thread::sleep(Duration::from_secs(10));
+                }
+                Err(_) => {
+                    println!("Error running the command: lncli --rpcserver=lnd.embassy tower info");
+                    std::thread::sleep(Duration::from_secs(10));
                 }
             }
-        }
+        },
     }
 
     if true {
@@ -769,7 +795,7 @@ fn main() -> Result<(), anyhow::Error> {
             WtClient::Disabled => {
                 println!("Watchtower Client Disabled");
             }
-            WtClient::Enabled {add_watchtowers} => {
+            WtClient::Enabled { add_watchtowers } => {
                 for watchtower_uri in add_watchtowers.iter() {
                     let parsed_watchtower_uri: WatchtowerUri = watchtower_uri.parse()?;
                     loop {
@@ -792,7 +818,10 @@ fn main() -> Result<(), anyhow::Error> {
                             }
                             Ok(output) => {
                                 let stderr = String::from_utf8_lossy(&output.stderr);
-                                println!("Failed to add watchtower {} with error: {}", &watchtower_uri, stderr);
+                                println!(
+                                    "Failed to add watchtower {} with error: {}",
+                                    &watchtower_uri, stderr
+                                );
                                 std::thread::sleep(Duration::from_secs(10));
                             }
                             Err(_) => {
@@ -800,7 +829,7 @@ fn main() -> Result<(), anyhow::Error> {
                                 std::thread::sleep(Duration::from_secs(10));
                             }
                         }
-                    };
+                    }
                 }
             }
         }
@@ -834,7 +863,6 @@ fn main() -> Result<(), anyhow::Error> {
 
     Ok(())
 }
-
 
 #[derive(Serialize, Deserialize)]
 struct JsonRpc1Res {

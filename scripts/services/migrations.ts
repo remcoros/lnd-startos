@@ -194,6 +194,22 @@ export const migration: T.ExpectedExports.migration = compat.migrations
           throw new Error("Cannot downgrade");
         },
       },
+      "0.17.3": {
+        up: compat.migrations.updateConfig(
+          (config: any) => {
+            if (config.advanced["max-commit-fee-rate-anchors"] == 10) {
+              config.advanced["max-commit-fee-rate-anchors"] = 100;
+            }
+            config.advanced["max-pending-channels"] = 5;
+            return config;
+          },
+          true,
+          { version: "0.17.3", type: "up" }
+        ),
+        down: () => {
+          throw new Error("Cannot downgrade");
+        },
+      },
     },
-    "0.17.0.3",
+    "0.17.3",
   );

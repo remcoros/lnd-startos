@@ -1,6 +1,6 @@
 ASSET_PATHS := $(shell find ./assets/*)
-CONFIGURATOR_SRC := $(shell find ./configurator/src) configurator/Cargo.toml configurator/Cargo.lock
-HEALTH_CHECK_SRC := $(shell find ./health-check/src) health-check/Cargo.toml health-check/Cargo.lock
+CONFIGURATOR_SRC := $(shell find ./configurator -name target -prune -o -type f -print) configurator/Cargo.toml configurator/Cargo.lock
+HEALTH_CHECK_SRC := $(shell find ./health-check -name target -prune -o -type f -print) health-check/Cargo.toml health-check/Cargo.lock
 PKG_VERSION := $(shell yq e ".version" manifest.yaml)
 PKG_ID := $(shell yq e ".id" manifest.yaml)
 
@@ -45,20 +45,20 @@ docker-images/aarch64.tar: Dockerfile docker_entrypoint.sh configurator/target/a
 	docker buildx build --tag start9/$(PKG_ID)/main:$(PKG_VERSION) --platform=linux/arm64 --build-arg ARCH=aarch64 -o type=docker,dest=docker-images/aarch64.tar .
 
 configurator/target/aarch64-unknown-linux-musl/release/configurator: $(CONFIGURATOR_SRC)
-	docker run --rm -it -v ~/.cargo/registry:/root/.cargo/registry -v "$(shell pwd)"/configurator:/home/rust/src messense/rust-musl-cross:aarch64-musl cargo build --release
-	docker run --rm -it -v ~/.cargo/registry:/root/.cargo/registry -v "$(shell pwd)"/configurator:/home/rust/src messense/rust-musl-cross:aarch64-musl musl-strip target/aarch64-unknown-linux-musl/release/configurator
+	docker run --rm -v ~/.cargo/registry:/root/.cargo/registry -v "$(shell pwd)"/configurator:/home/rust/src messense/rust-musl-cross:aarch64-musl cargo build --release
+	docker run --rm -v ~/.cargo/registry:/root/.cargo/registry -v "$(shell pwd)"/configurator:/home/rust/src messense/rust-musl-cross:aarch64-musl musl-strip target/aarch64-unknown-linux-musl/release/configurator
 
 health-check/target/aarch64-unknown-linux-musl/release/health-check: $(HEALTH_CHECK_SRC)
-	docker run --rm -it -v ~/.cargo/registry:/root/.cargo/registry -v "$(shell pwd)"/health-check:/home/rust/src messense/rust-musl-cross:aarch64-musl cargo build --release
-	docker run --rm -it -v ~/.cargo/registry:/root/.cargo/registry -v "$(shell pwd)"/health-check:/home/rust/src messense/rust-musl-cross:aarch64-musl musl-strip target/aarch64-unknown-linux-musl/release/health-check
+	docker run --rm -v ~/.cargo/registry:/root/.cargo/registry -v "$(shell pwd)"/health-check:/home/rust/src messense/rust-musl-cross:aarch64-musl cargo build --release
+	docker run --rm -v ~/.cargo/registry:/root/.cargo/registry -v "$(shell pwd)"/health-check:/home/rust/src messense/rust-musl-cross:aarch64-musl musl-strip target/aarch64-unknown-linux-musl/release/health-check
 
 configurator/target/x86_64-unknown-linux-musl/release/configurator: $(CONFIGURATOR_SRC)
-	docker run --rm -it -v ~/.cargo/registry:/root/.cargo/registry -v "$(shell pwd)"/configurator:/home/rust/src messense/rust-musl-cross:x86_64-musl cargo build --release
-	docker run --rm -it -v ~/.cargo/registry:/root/.cargo/registry -v "$(shell pwd)"/configurator:/home/rust/src messense/rust-musl-cross:x86_64-musl musl-strip target/x86_64-unknown-linux-musl/release/configurator
+	docker run --rm -v ~/.cargo/registry:/root/.cargo/registry -v "$(shell pwd)"/configurator:/home/rust/src messense/rust-musl-cross:x86_64-musl cargo build --release
+	docker run --rm -v ~/.cargo/registry:/root/.cargo/registry -v "$(shell pwd)"/configurator:/home/rust/src messense/rust-musl-cross:x86_64-musl musl-strip target/x86_64-unknown-linux-musl/release/configurator
 
 health-check/target/x86_64-unknown-linux-musl/release/health-check: $(HEALTH_CHECK_SRC)
-	docker run --rm -it -v ~/.cargo/registry:/root/.cargo/registry -v "$(shell pwd)"/health-check:/home/rust/src messense/rust-musl-cross:x86_64-musl cargo build --release
-	docker run --rm -it -v ~/.cargo/registry:/root/.cargo/registry -v "$(shell pwd)"/health-check:/home/rust/src messense/rust-musl-cross:x86_64-musl musl-strip target/x86_64-unknown-linux-musl/release/health-check
+	docker run --rm -v ~/.cargo/registry:/root/.cargo/registry -v "$(shell pwd)"/health-check:/home/rust/src messense/rust-musl-cross:x86_64-musl cargo build --release
+	docker run --rm -v ~/.cargo/registry:/root/.cargo/registry -v "$(shell pwd)"/health-check:/home/rust/src messense/rust-musl-cross:x86_64-musl musl-strip target/x86_64-unknown-linux-musl/release/health-check
 
 scripts/embassy.js: scripts/**/*.ts
 	deno bundle scripts/embassy.ts scripts/embassy.js

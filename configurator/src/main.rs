@@ -195,6 +195,7 @@ struct AdvancedConfig {
     allow_circular_route: bool,
     bitcoin: BitcoinChannelConfig,
     sweeper: SweeperConfig,
+    extra_addresses: Vec<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -396,6 +397,12 @@ fn main() -> Result<(), anyhow::Error> {
         include_str!("lnd.conf.template"),
         container_ip = container_ip.unwrap_or_else(|| [0, 0, 0, 0].into()),
         peer_tor_address = peer_tor_address,
+        more_external_hosts = config
+            .advanced
+            .extra_addresses
+            .into_iter()
+            .map(|s| format!("externalhosts={s}\n"))
+            .collect::<String>(),
         watchtower_tor_address = watchtower_tor_address,
         payments_expiration_grace_period = config.advanced.payments_expiration_grace_period,
         debug_level = config.advanced.debug_level,
